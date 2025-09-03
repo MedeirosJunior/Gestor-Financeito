@@ -411,8 +411,13 @@ app.get('/debug/users', (req, res) => {
 
 // Servir o React app para todas as outras rotas (SPA routing)
 if (process.env.NODE_ENV === 'production') {
-  app.get('/*', (req, res) => {
-    res.sendFile(path.join(__dirname, 'gestor-financeiro-frontend/build/index.html'));
+  app.use((req, res, next) => {
+    // Se a requisição não for para uma rota da API, servir o React app
+    if (!req.path.startsWith('/api') && !req.path.startsWith('/debug')) {
+      res.sendFile(path.join(__dirname, 'gestor-financeiro-frontend/build/index.html'));
+    } else {
+      next();
+    }
   });
 }
 
