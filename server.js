@@ -409,6 +409,13 @@ app.get('/debug/users', (req, res) => {
   });
 });
 
+// Servir o React app para todas as outras rotas (SPA routing)
+if (process.env.NODE_ENV === 'production') {
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, 'gestor-financeiro-frontend/build/index.html'));
+  });
+}
+
 app.listen(port, () => {
   console.log(`🚀 Servidor rodando em http://localhost:${port}`);
   console.log(`📊 API do Gestor Financeiro iniciada com sucesso!`);
