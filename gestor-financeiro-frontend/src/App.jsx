@@ -3,9 +3,20 @@ import './App.css';
 import config from './config';
 
 function App() {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [activeTab, setActiveTab] = useState('dashboard');
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(false);
+
+  // Verificar autenticação no localStorage
+  useEffect(() => {
+    const authStatus = localStorage.getItem('isAuthenticated');
+    if (authStatus === 'true') {
+      setIsAuthenticated(true);
+    }
+  }, []);
+
+  // Buscar transações do servidor
 
   const fetchTransactions = async () => {
     setLoading(true);
@@ -48,6 +59,21 @@ function App() {
     }
   };
 
+  const handleLogin = (status) => {
+    setIsAuthenticated(status);
+  };
+
+  const handleLogout = () => {
+    setIsAuthenticated(false);
+    localStorage.removeItem('isAuthenticated');
+    setActiveTab('dashboard');
+  };
+
+  // Se não estiver autenticado, mostrar tela de login
+  if (!isAuthenticated) {
+    return <Login onLogin={handleLogin} />;
+  }
+
   return (
     <div className="app">
       <header className="header">
@@ -82,6 +108,13 @@ function App() {
             onClick={() => setActiveTab('historico')}
           >
             📋 Histórico
+          </button>
+          <button 
+            className="logout-btn" 
+            onClick={handleLogout}
+            title="Sair"
+          >
+            🚪 Sair
           </button>
         </nav>
       </header>
@@ -120,6 +153,64 @@ function App() {
           />
         )}
       </main>
+    </div>
+  );
+}
+
+// Componente de Login
+function Login({ onLogin }) {
+  const [credentials, setCredentials] = useState({
+    username: '',
+    password: ''
+  });
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    // Autenticação simples (você pode melhorar isso)
+    if (credentials.username === 'admin' && credentials.password === '123456') {
+      onLogin(true);
+      localStorage.setItem('isAuthenticated', 'true');
+    } else {
+      alert('Usuário ou senha incorretos!');
+    }
+  };
+
+  return (
+    <div className="login-container">
+      <div className="login-box">
+        <h1>💰 Gestor Financeiro</h1>
+        <h2>🔐 Login</h2>
+        <form onSubmit={handleSubmit}>
+          <div className="form-group">
+            <label>👤 Usuário:</label>
+            <input
+              type="text"
+              value={credentials.username}
+              onChange={(e) => setCredentials({...credentials, username: e.target.value})}
+              placeholder="Digite seu usuário"
+              required
+            />
+          </div>
+          <div className="form-group">
+            <label>🔑 Senha:</label>
+            <input
+              type="password"
+              value={credentials.password}
+              onChange={(e) => setCredentials({...credentials, password: e.target.value})}
+              placeholder="Digite sua senha"
+              required
+            />
+          </div>
+          <button type="submit" className="login-btn">
+            Entrar
+          </button>
+        </form>
+        <div className="login-info">
+          <p><strong>Demo:</strong></p>
+          <p>Usuário: admin</p>
+          <p>Senha: 123456</p>
+        </div>
+      </div>
     </div>
   );
 }
