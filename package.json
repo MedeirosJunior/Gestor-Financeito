@@ -4,13 +4,12 @@
   "description": "Sistema completo de gestão financeira pessoal",
   "main": "server.js",
   "scripts": {
-    "start": "NODE_ENV=production node server.js",
+    "start": "node server.js",
     "dev": "concurrently \"npm run backend\" \"npm run frontend\"",
     "backend": "node server.js",
     "frontend": "cd gestor-financeiro-frontend && npm start",
     "build": "cd gestor-financeiro-frontend && npm run build",
-    "install-all": "npm install && cd gestor-financeiro-frontend && npm install",
-    "render-build": "cd gestor-financeiro-frontend && npm install && npm run build"
+    "install-all": "npm install && cd gestor-financeiro-frontend && npm install"
   },
   "engines": {
     "node": ">=18.0.0",
@@ -44,4 +43,5 @@
   "devDependencies": {
     "concurrently": "^7.6.0"
   }
+}
 }

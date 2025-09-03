@@ -417,10 +417,3 @@ app.listen(port, () => {
     console.log(`🎯 Frontend será iniciado em: http://localhost:3000`);
   }
 });
-  console.log(`🚀 Servidor rodando em http://localhost:${port}`);
-  console.log(`📊 API do Gestor Financeiro iniciada com sucesso!`);
-  
-  if (process.env.NODE_ENV !== 'production') {
-    console.log(`🎯 Frontend será iniciado em: http://localhost:3000`);
-  }
-});
