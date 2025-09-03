@@ -1,0 +1,36 @@
+{
+  "name": "gestor-financeiro",
+  "version": "1.0.0",
+  "description": "Sistema completo de gestão financeira pessoal",
+  "main": "server.js",
+  "scripts": {
+    "dev": "concurrently \"node server.js\" \"cd gestor-financeiro-frontend && npm start\"",
+    "backend": "node server.js",
+    "frontend": "cd gestor-financeiro-frontend && npm start",
+    "build": "cd gestor-financeiro-frontend && npm run build",
+    "install-frontend": "cd gestor-financeiro-frontend && npm install"
+  },
+  "keywords": [
+    "finance",
+    "money",
+    "budget",
+    "expenses",
+    "income",
+    "react",
+    "nodejs"
+  ],
+  "author": "Seu Nome",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/seu-usuario/gestor-financeiro.git"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^5.1.0",
+    "sqlite3": "^5.1.7"
+  },
+  "devDependencies": {
+    "concurrently": "^7.6.0"
+  }
+}
