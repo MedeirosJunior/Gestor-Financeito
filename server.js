@@ -11,6 +11,7 @@ const corsOptions = {
     'http://localhost:3000',
     'https://gestor-financeito.netlify.app',
     'https://gestor-financeito.vercel.app',
+    'https://spiffy-bonbon-c3c559.netlify.app',
     process.env.FRONTEND_URL
   ].filter(Boolean),
   credentials: true,
