@@ -5,13 +5,12 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "concurrently \"node server.js\" \"cd gestor-financeiro-frontend && npm start\"",
+    "dev": "concurrently \"npm run backend\" \"npm run frontend\"",
     "backend": "node server.js",
     "frontend": "cd gestor-financeiro-frontend && npm start",
-    "build": "cd gestor-financeiro-frontend && npm run build && npm run build:copy",
-    "build:copy": "cp -r gestor-financeiro-frontend/build/* public/ || xcopy /E /I gestor-financeiro-frontend\\build\\* public\\",
-    "install-frontend": "cd gestor-financeiro-frontend && npm install",
-    "postinstall": "npm run install-frontend && npm run build"
+    "build": "cd gestor-financeiro-frontend && npm run build",
+    "install-all": "npm install && cd gestor-financeiro-frontend && npm install",
+    "render-build": "cd gestor-financeiro-frontend && npm install && npm run build"
   },
   "engines": {
     "node": ">=18.0.0",
@@ -26,16 +25,21 @@
     "react",
     "nodejs"
   ],
-  "author": "Seu Nome",
+  "author": "MedeirosJunior",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/seu-usuario/gestor-financeiro.git"
+    "url": "https://github.com/MedeirosJunior/Gestor-Financeito.git"
   },
+  "bugs": {
+    "url": "https://github.com/MedeirosJunior/Gestor-Financeito/issues"
+  },
+  "homepage": "https://github.com/MedeirosJunior/Gestor-Financeito#readme",
   "dependencies": {
     "cors": "^2.8.5",
     "express": "^5.1.0",
-    "sqlite3": "^5.1.7"
+    "sqlite3": "^5.1.7",
+    "concurrently": "^7.6.0"
   },
   "devDependencies": {
     "concurrently": "^7.6.0"

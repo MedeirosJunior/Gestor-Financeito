@@ -37,8 +37,8 @@ Sistema completo de gestão financeira pessoal desenvolvido com React e Node.js.
 
 1. **Clone o repositório**:
 ```bash
-git clone https://github.com/seu-usuario/gestor-financeiro.git
-cd gestor-financeiro
+git clone https://github.com/MedeirosJunior/Gestor-Financeito.git
+cd Gestor-Financeito
 ```
 
 2. **Instale as dependências do backend**:
@@ -64,6 +64,7 @@ O sistema estará disponível em:
 
 ## 👤 Acesso Administrativo
 
+O sistema cria automaticamente um usuário administrador com as credenciais mostradas acima.
 
 ## 📱 Funcionalidades Detalhadas
 
@@ -120,9 +121,9 @@ Este projeto está sob a licença MIT. Veja o arquivo `LICENSE` para mais detalh
 
 ## 👨‍💻 Autor
 
-Seu Nome
-- GitHub: [@seu-usuario](https://github.com/seu-usuario)
-- Email: seu-email@example.com
+MedeirosJunior
+- GitHub: [@MedeirosJunior](https://github.com/MedeirosJunior)
+- Projeto: [Gestor-Financeito](https://github.com/MedeirosJunior/Gestor-Financeito)
 
 ## 🎯 Próximas Funcionalidades
 

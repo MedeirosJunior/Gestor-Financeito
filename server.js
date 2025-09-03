@@ -8,8 +8,10 @@ const port = process.env.PORT || 3001;
 app.use(cors());
 app.use(express.json());
 
-// Servir arquivos estáticos do React build
-app.use(express.static(path.join(__dirname, 'gestor-financeiro-frontend/build')));
+// Servir arquivos estáticos do React build (apenas em produção)
+if (process.env.NODE_ENV === 'production') {
+  app.use(express.static(path.join(__dirname, 'gestor-financeiro-frontend/build')));
+}
 
 // Criar/conectar ao banco de dados
 const db = new sqlite3.Database('./financeiro.db');
@@ -407,21 +409,18 @@ app.get('/debug/users', (req, res) => {
   });
 });
 
-// Rota catch-all para servir o React app
-app.get('*', (req, res) => {
-  // Se a rota não é uma API, serve o index.html do React
-  if (!req.path.startsWith('/api') && !req.path.startsWith('/admin') && !req.path.startsWith('/auth') && !req.path.startsWith('/transactions') && !req.path.startsWith('/debug')) {
+// Rota catch-all para servir o React app (apenas em produção)
+if (process.env.NODE_ENV === 'production') {
+  app.get('*', (req, res) => {
     res.sendFile(path.join(__dirname, 'gestor-financeiro-frontend/build', 'index.html'));
-  } else {
-    res.status(404).json({ error: 'Rota não encontrada' });
-  }
-});
+  });
+}
 
 app.listen(port, () => {
   console.log(`🚀 Servidor rodando em http://localhost:${port}`);
   console.log(`📊 API do Gestor Financeiro iniciada com sucesso!`);
-});
-app.listen(port, () => {
-  console.log(`🚀 Servidor rodando em http://localhost:${port}`);
-  console.log(`📊 API do Gestor Financeiro iniciada com sucesso!`);
+  
+  if (process.env.NODE_ENV !== 'production') {
+    console.log(`🎯 Frontend será iniciado em: http://localhost:3000`);
+  }
 });
