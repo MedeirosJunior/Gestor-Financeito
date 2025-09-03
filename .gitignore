@@ -14,6 +14,7 @@ yarn-error.log*
 
 # Arquivos de build
 gestor-financeiro-frontend/build/
+public/
 dist/
 
 # Arquivos de ambiente
@@ -22,6 +23,8 @@ dist/
 .env.development.local
 .env.test.local
 .env.production.local
+.env.production
+.env.staging
 
 # Cache
 .cache/

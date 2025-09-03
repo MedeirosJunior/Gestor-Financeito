@@ -2,6 +2,14 @@
 
 Sistema completo de gestão financeira pessoal desenvolvido com React e Node.js.
 
+## 🌐 Demo Online
+
+**Acesse o sistema em produção**: https://gestor-financeito.onrender.com
+
+### Credenciais de Teste:
+- **Email**: admin@gestor.com
+- **Senha**: j92953793*/*
+
 ## 🚀 Funcionalidades
 
 - **Dashboard Interativo**: Visão geral das finanças mensais
@@ -56,9 +64,6 @@ O sistema estará disponível em:
 
 ## 👤 Acesso Administrativo
 
-O sistema cria automaticamente um usuário administrador:
-- Email: `admin@gestor.com`
-- Senha: `j92953793*/*`
 
 ## 📱 Funcionalidades Detalhadas
 
@@ -127,3 +132,18 @@ Seu Nome
 - [ ] Backup automático
 - [ ] App mobile
 - [ ] Integração bancária
+
+## 🚀 Deploy
+
+O sistema está hospedado no Render.com:
+- **URL**: https://gestor-financeito.onrender.com
+- **Backend**: Node.js + Express
+- **Frontend**: React (servido como arquivos estáticos)
+- **Banco**: SQLite
+
+### Deploy Automático
+O projeto está configurado para deploy automático via GitHub:
+1. Push para a branch `main`
+2. Render detecta mudanças
+3. Executa build automaticamente
+4. Atualiza a aplicação

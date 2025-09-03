@@ -1,11 +1,15 @@
 const express = require('express');
 const cors = require('cors');
 const sqlite3 = require('sqlite3').verbose();
+const path = require('path');
 const app = express();
-const port = 3001;
+const port = process.env.PORT || 3001;
 
 app.use(cors());
 app.use(express.json());
+
+// Servir arquivos estáticos do React build
+app.use(express.static(path.join(__dirname, 'gestor-financeiro-frontend/build')));
 
 // Criar/conectar ao banco de dados
 const db = new sqlite3.Database('./financeiro.db');
@@ -401,6 +405,16 @@ app.get('/debug/users', (req, res) => {
     }
     res.json(rows);
   });
+});
+
+// Rota catch-all para servir o React app
+app.get('*', (req, res) => {
+  // Se a rota não é uma API, serve o index.html do React
+  if (!req.path.startsWith('/api') && !req.path.startsWith('/admin') && !req.path.startsWith('/auth') && !req.path.startsWith('/transactions') && !req.path.startsWith('/debug')) {
+    res.sendFile(path.join(__dirname, 'gestor-financeiro-frontend/build', 'index.html'));
+  } else {
+    res.status(404).json({ error: 'Rota não encontrada' });
+  }
 });
 
 app.listen(port, () => {
