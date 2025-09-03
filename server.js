@@ -411,10 +411,27 @@ app.get('/debug/users', (req, res) => {
 
 // Servir o React app para todas as outras rotas (SPA routing)
 if (process.env.NODE_ENV === 'production') {
+  const fs = require('fs');
+  const buildPath = path.join(__dirname, 'gestor-financeiro-frontend/build/index.html');
+  
   app.use((req, res, next) => {
     // Se a requisição não for para uma rota da API, servir o React app
     if (!req.path.startsWith('/api') && !req.path.startsWith('/debug')) {
-      res.sendFile(path.join(__dirname, 'gestor-financeiro-frontend/build/index.html'));
+      // Verificar se o arquivo build existe
+      if (fs.existsSync(buildPath)) {
+        res.sendFile(buildPath);
+      } else {
+        console.error('❌ Build do frontend não encontrado:', buildPath);
+        res.status(404).send(`
+          <html>
+            <body>
+              <h1>Aplicação em Deploy</h1>
+              <p>O frontend está sendo construído. Aguarde alguns minutos e recarregue a página.</p>
+              <p>Build path: ${buildPath}</p>
+            </body>
+          </html>
+        `);
+      }
     } else {
       next();
     }
