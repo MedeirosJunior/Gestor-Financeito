@@ -409,14 +409,14 @@ app.get('/debug/users', (req, res) => {
   });
 });
 
-// Rota catch-all para servir o React app (apenas em produção)
-if (process.env.NODE_ENV === 'production') {
-  app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, 'gestor-financeiro-frontend/build', 'index.html'));
-  });
-}
-
 app.listen(port, () => {
+  console.log(`🚀 Servidor rodando em http://localhost:${port}`);
+  console.log(`📊 API do Gestor Financeiro iniciada com sucesso!`);
+  
+  if (process.env.NODE_ENV !== 'production') {
+    console.log(`🎯 Frontend será iniciado em: http://localhost:3000`);
+  }
+});
   console.log(`🚀 Servidor rodando em http://localhost:${port}`);
   console.log(`📊 API do Gestor Financeiro iniciada com sucesso!`);
   

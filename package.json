@@ -4,7 +4,7 @@
   "description": "Sistema completo de gestão financeira pessoal",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js",
+    "start": "NODE_ENV=production node server.js",
     "dev": "concurrently \"npm run backend\" \"npm run frontend\"",
     "backend": "node server.js",
     "frontend": "cd gestor-financeiro-frontend && npm start",
