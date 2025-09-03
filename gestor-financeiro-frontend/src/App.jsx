@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import './App.css';
+import config from './config';
 
 function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -9,7 +10,7 @@ function App() {
   const fetchTransactions = async () => {
     setLoading(true);
     try {
-      const response = await fetch('http://localhost:3001/transactions');
+      const response = await fetch(`${config.API_URL}/transactions`);
       const data = await response.json();
       setTransactions(data);
     } catch (error) {
@@ -25,7 +26,7 @@ function App() {
 
   const addTransaction = async (transaction) => {
     try {
-      await fetch('http://localhost:3001/transactions', {
+      await fetch(`${config.API_URL}/transactions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(transaction),
@@ -38,7 +39,7 @@ function App() {
 
   const deleteTransaction = async (id) => {
     try {
-      await fetch(`http://localhost:3001/transactions/${id}`, {
+      await fetch(`${config.API_URL}/transactions/${id}`, {
         method: 'DELETE',
       });
       fetchTransactions();

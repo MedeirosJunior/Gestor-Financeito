@@ -1,0 +1,13 @@
+[build]
+  base = "gestor-financeiro-frontend"
+  command = "npm run build"
+  publish = "build"
+
+[build.environment]
+  NODE_VERSION = "18.18.0"
+  REACT_APP_API_URL = "https://gestor-financeito-api.onrender.com"
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
