@@ -1,0 +1,1026 @@
+import React, { useState, useEffect } from 'react';
+import './App.css';
+
+function App() {
+  const [activeTab, setActiveTab] = useState('dashboard');
+  const [transactions, setTransactions] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [user, setUser] = useState(null);
+
+  const fetchTransactions = async () => {
+    setLoading(true);
+    try {
+      const userId = user?.id || JSON.parse(localStorage.getItem('user'))?.id;
+      const baseURL = window.location.hostname === 'localhost' 
+        ? 'http://localhost:3001' 
+        : '';
+      const response = await fetch(`${baseURL}/transactions?userId=${userId}`);
+      const data = await response.json();
+      setTransactions(data);
+    } catch (error) {
+      console.error('Erro ao buscar transações:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchTransactions();
+  }, []);
+
+  useEffect(() => {
+    // Verificar se usuário está logado
+    const savedUser = localStorage.getItem('user');
+    if (savedUser) {
+      setUser(JSON.parse(savedUser));
+      setIsAuthenticated(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (isAuthenticated && user) {
+      fetchTransactions();
+    }
+  }, [isAuthenticated, user]);
+
+  const addTransaction = async (transaction) => {
+    try {
+      const transactionWithUser = {
+        ...transaction,
+        userId: user.id
+      };
+      
+      const baseURL = window.location.hostname === 'localhost' 
+        ? 'http://localhost:3001' 
+        : '';
+      
+      await fetch(`${baseURL}/transactions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(transactionWithUser),
+      });
+      fetchTransactions();
+    } catch (error) {
+      console.error('Erro ao adicionar transação:', error);
+    }
+  };
+
+  const deleteTransaction = async (id) => {
+    try {
+      const baseURL = window.location.hostname === 'localhost' 
+        ? 'http://localhost:3001' 
+        : '';
+      
+      await fetch(`${baseURL}/transactions/${id}?userId=${user.id}`, {
+        method: 'DELETE',
+      });
+      fetchTransactions();
+    } catch (error) {
+      console.error('Erro ao deletar transação:', error);
+    }
+  };
+
+  const handleLogin = (userData) => {
+    setUser(userData);
+    setIsAuthenticated(true);
+    localStorage.setItem('user', JSON.stringify(userData));
+  };
+
+  const handleLogout = () => {
+    setUser(null);
+    setIsAuthenticated(false);
+    localStorage.removeItem('user');
+    setActiveTab('dashboard');
+  };
+
+  if (!isAuthenticated) {
+    return <LoginScreen onLogin={handleLogin} />;
+  }
+
+  return (
+    <div className="app">
+      <header className="header">
+        <div className="header-content">
+          <h1>💰 Gestor Financeiro</h1>
+          <div className="user-info">
+            <span>Olá, {user?.name}! {user?.role === 'admin' && '👑'}</span>
+            <button onClick={handleLogout} className="logout-btn">
+              🚪 Sair
+            </button>
+          </div>
+        </div>
+        <nav className="nav">
+          <button 
+            className={activeTab === 'dashboard' ? 'active' : ''} 
+            onClick={() => setActiveTab('dashboard')}
+          >
+            📊 Dashboard
+          </button>
+          <button 
+            className={activeTab === 'entradas' ? 'active' : ''} 
+            onClick={() => setActiveTab('entradas')}
+          >
+            💵 Entradas
+          </button>
+          <button 
+            className={activeTab === 'despesas' ? 'active' : ''} 
+            onClick={() => setActiveTab('despesas')}
+          >
+            💸 Despesas
+          </button>
+          <button 
+            className={activeTab === 'relatorios' ? 'active' : ''} 
+            onClick={() => setActiveTab('relatorios')}
+          >
+            📈 Relatórios
+          </button>
+          <button 
+            className={activeTab === 'historico' ? 'active' : ''} 
+            onClick={() => setActiveTab('historico')}
+          >
+            📋 Histórico
+          </button>
+          {user?.role === 'admin' && (
+            <>
+              <button 
+                className={activeTab === 'admin-dashboard' ? 'active' : ''} 
+                onClick={() => setActiveTab('admin-dashboard')}
+              >
+                🔧 Admin
+              </button>
+              <button 
+                className={activeTab === 'usuarios' ? 'active' : ''} 
+                onClick={() => setActiveTab('usuarios')}
+              >
+                👥 Usuários
+              </button>
+            </>
+          )}
+        </nav>
+      </header>
+
+      <main className="main">
+        {loading && <div className="loading">Carregando...</div>}
+        
+        {activeTab === 'dashboard' && (
+          <Dashboard transactions={transactions} />
+        )}
+        
+        {activeTab === 'entradas' && (
+          <LancamentoForm 
+            type="entrada" 
+            onAdd={addTransaction}
+            title="💵 Lançar Entrada"
+          />
+        )}
+        
+        {activeTab === 'despesas' && (
+          <LancamentoForm 
+            type="despesa" 
+            onAdd={addTransaction}
+            title="💸 Lançar Despesa"
+          />
+        )}
+        
+        {activeTab === 'relatorios' && (
+          <Relatorios transactions={transactions} />
+        )}
+        
+        {activeTab === 'historico' && (
+          <Historico 
+            transactions={transactions} 
+            onDelete={deleteTransaction}
+          />
+        )}
+        
+        {activeTab === 'admin-dashboard' && user?.role === 'admin' && (
+          <AdminDashboard />
+        )}
+        
+        {activeTab === 'usuarios' && user?.role === 'admin' && (
+          <UserManagement />
+        )}
+      </main>
+    </div>
+  );
+}
+
+// Tela de Login
+function LoginScreen({ onLogin }) {
+  const [loginForm, setLoginForm] = useState({
+    email: '',
+    password: ''
+  });
+  const [loading, setLoading] = useState(false);
+
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+
+    try {
+      const baseURL = window.location.hostname === 'localhost' 
+        ? 'http://localhost:3001' 
+        : '';
+      
+      const response = await fetch(`${baseURL}/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(loginForm),
+      });
+
+      if (response.ok) {
+        const userData = await response.json();
+        onLogin(userData.user);
+      } else {
+        alert('Email ou senha inválidos');
+      }
+    } catch (error) {
+      console.error('Erro no login:', error);
+      alert('Erro ao fazer login. Tente novamente.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="login-container">
+      <div className="login-card">
+        <div className="login-header">
+          <h1>💰 Gestor Financeiro</h1>
+          <p>Controle suas finanças de forma simples e eficiente</p>
+        </div>
+
+        <form onSubmit={handleLogin} className="login-form">
+          <h2>Entrar na sua conta</h2>
+          
+          <div className="form-group">
+            <label>Email</label>
+            <input
+              type="email"
+              placeholder="seu@email.com"
+              value={loginForm.email}
+              onChange={e => setLoginForm({ ...loginForm, email: e.target.value })}
+              required
+            />
+          </div>
+
+          <div className="form-group">
+            <label>Senha</label>
+            <input
+              type="password"
+              placeholder="••••••••"
+              value={loginForm.password}
+              onChange={e => setLoginForm({ ...loginForm, password: e.target.value })}
+              required
+            />
+          </div>
+
+          <button type="submit" disabled={loading} className="login-btn">
+            {loading ? 'Entrando...' : '🔐 Entrar'}
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// Adicionar componente de gerenciamento de usuários
+function UserManagement() {
+  const [users, setUsers] = useState([]);
+  const [registerForm, setRegisterForm] = useState({
+    name: '',
+    email: '',
+    password: '',
+    confirmPassword: '',
+    role: 'user'
+  });
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    fetchUsers();
+  }, []);
+
+  const fetchUsers = async () => {
+    try {
+      const response = await fetch('http://localhost:3001/admin/users');
+      const data = await response.json();
+      setUsers(data);
+    } catch (error) {
+      console.error('Erro ao buscar usuários:', error);
+    }
+  };
+
+  const handleRegister = async (e) => {
+    e.preventDefault();
+    
+    if (registerForm.password !== registerForm.confirmPassword) {
+      alert('Senhas não conferem');
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const response = await fetch('http://localhost:3001/admin/register-user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: registerForm.name,
+          email: registerForm.email,
+          password: registerForm.password,
+          role: registerForm.role
+        }),
+      });
+
+      if (response.ok) {
+        alert('Usuário cadastrado com sucesso!');
+        setRegisterForm({ name: '', email: '', password: '', confirmPassword: '', role: 'user' });
+        fetchUsers();
+      } else {
+        const error = await response.json();
+        alert(error.message || 'Erro ao cadastrar usuário');
+      }
+    } catch (error) {
+      console.error('Erro no cadastro:', error);
+      alert('Erro ao cadastrar. Tente novamente.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const deleteUser = async (userId) => {
+    if (!window.confirm('Deseja realmente excluir este usuário?')) return;
+
+    try {
+      const response = await fetch(`http://localhost:3001/admin/users/${userId}`, {
+        method: 'DELETE'
+      });
+
+      if (response.ok) {
+        alert('Usuário excluído com sucesso!');
+        fetchUsers();
+      } else {
+        alert('Erro ao excluir usuário');
+      }
+    } catch (error) {
+      console.error('Erro ao excluir usuário:', error);
+      alert('Erro ao excluir usuário');
+    }
+  };
+
+  return (
+    <div className="user-management">
+      <h2>👥 Gerenciamento de Usuários</h2>
+      
+      <div className="register-section">
+        <h3>Cadastrar Novo Usuário</h3>
+        <form onSubmit={handleRegister} className="register-form">
+          <div className="form-group">
+            <label>Nome completo</label>
+            <input
+              type="text"
+              placeholder="Nome do usuário"
+              value={registerForm.name}
+              onChange={e => setRegisterForm({ ...registerForm, name: e.target.value })}
+              required
+            />
+          </div>
+
+          <div className="form-group">
+            <label>Email</label>
+            <input
+              type="email"
+              placeholder="email@exemplo.com"
+              value={registerForm.email}
+              onChange={e => setRegisterForm({ ...registerForm, email: e.target.value })}
+              required
+            />
+          </div>
+
+          <div className="form-group">
+            <label>Tipo de usuário</label>
+            <select
+              value={registerForm.role}
+              onChange={e => setRegisterForm({ ...registerForm, role: e.target.value })}
+            >
+              <option value="user">Usuário</option>
+              <option value="admin">Administrador</option>
+            </select>
+          </div>
+
+          <div className="form-group">
+            <label>Senha</label>
+            <input
+              type="password"
+              placeholder="••••••••"
+              value={registerForm.password}
+              onChange={e => setRegisterForm({ ...registerForm, password: e.target.value })}
+              required
+              minLength="6"
+            />
+          </div>
+
+          <div className="form-group">
+            <label>Confirmar senha</label>
+            <input
+              type="password"
+              placeholder="••••••••"
+              value={registerForm.confirmPassword}
+              onChange={e => setRegisterForm({ ...registerForm, confirmPassword: e.target.value })}
+              required
+            />
+          </div>
+
+          <button type="submit" disabled={loading} className="submit-btn">
+            {loading ? 'Cadastrando...' : '✨ Cadastrar Usuário'}
+          </button>
+        </form>
+      </div>
+
+      <div className="users-list">
+        <h3>Usuários Cadastrados</h3>
+        <div className="users-grid">
+          {users.map(user => (
+            <div key={user.id} className="user-card">
+              <div className="user-info">
+                <h4>{user.name}</h4>
+                <p>{user.email}</p>
+                <span className={`role ${user.role}`}>
+                  {user.role === 'admin' ? '👑 Admin' : '👤 Usuário'}
+                </span>
+              </div>
+              {user.role !== 'admin' && (
+                <button 
+                  onClick={() => deleteUser(user.id)}
+                  className="delete-btn"
+                >
+                  🗑️
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Dashboard com resumo financeiro
+function Dashboard({ transactions }) {
+  const currentMonth = new Date().toISOString().slice(0, 7);
+  
+  // Garantir que transactions é sempre um array
+  const safeTransactions = Array.isArray(transactions) ? transactions : [];
+  
+  const monthlyTransactions = safeTransactions.filter(t => 
+    t.date && t.date.startsWith(currentMonth)
+  );
+  
+  const totalEntradas = monthlyTransactions
+    .filter(t => t.type === 'entrada')
+    .reduce((sum, t) => sum + parseFloat(t.value || 0), 0);
+    
+  const totalDespesas = monthlyTransactions
+    .filter(t => t.type === 'despesa')
+    .reduce((sum, t) => sum + parseFloat(t.value || 0), 0);
+    
+  const saldo = totalEntradas - totalDespesas;
+  const monthName = new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+
+  return (
+    <div className="dashboard">
+      <h2>Dashboard - {monthName}</h2>
+      
+      <div className="cards">
+        <div className="card entrada">
+          <h3>💵 Total Entradas</h3>
+          <p className="value">R$ {totalEntradas.toFixed(2)}</p>
+        </div>
+        
+        <div className="card despesa">
+          <h3>💸 Total Despesas</h3>
+          <p className="value">R$ {totalDespesas.toFixed(2)}</p>
+        </div>
+        
+        <div className={`card saldo ${saldo >= 0 ? 'positivo' : 'negativo'}`}>
+          <h3>💰 Saldo</h3>
+          <p className="value">R$ {saldo.toFixed(2)}</p>
+        </div>
+      </div>
+
+      <div className="recent-transactions">
+        <h3>Últimas Transações</h3>
+        {monthlyTransactions.length > 0 ? (
+          monthlyTransactions.slice(-5).reverse().map(transaction => (
+            <div key={transaction.id} className={`transaction-item ${transaction.type}`}>
+              <span className="date">{new Date(transaction.date).toLocaleDateString('pt-BR')}</span>
+              <span className="description">{transaction.description}</span>
+              <span className="category">{transaction.category}</span>
+              <span className="value">
+                {transaction.type === 'entrada' ? '+' : '-'}R$ {parseFloat(transaction.value).toFixed(2)}
+              </span>
+            </div>
+          ))
+        ) : (
+          <div className="no-transactions">
+            <p>Nenhuma transação encontrada para este mês.</p>
+            <p>Comece adicionando suas primeiras entradas e despesas!</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Formulário para lançamentos
+function LancamentoForm({ type, onAdd, title }) {
+  const [form, setForm] = useState({
+    type: type,
+    description: '',
+    value: '',
+    date: new Date().toISOString().slice(0, 10),
+    category: ''
+  });
+
+  const categories = {
+    entrada: ['Salário', 'Freelance', 'Investimentos', 'Vendas', 'Outros'],
+    despesa: ['Alimentação', 'Transporte', 'Moradia', 'Saúde', 'Educação', 'Lazer', 'Outros']
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (!form.description || !form.value || !form.category) {
+      alert('Preencha todos os campos obrigatórios');
+      return;
+    }
+    
+    onAdd({
+      ...form,
+      value: parseFloat(form.value)
+    });
+    
+    setForm({
+      type: type,
+      description: '',
+      value: '',
+      date: new Date().toISOString().slice(0, 10),
+      category: ''
+    });
+    
+    alert(`${type === 'entrada' ? 'Entrada' : 'Despesa'} cadastrada com sucesso!`);
+  };
+
+  return (
+    <div className="lancamento-form">
+      <h2>{title}</h2>
+      
+      <form onSubmit={handleSubmit}>
+        <div className="form-group">
+          <label>Descrição *</label>
+          <input
+            type="text"
+            placeholder="Ex: Supermercado, Salário..."
+            value={form.description}
+            onChange={e => setForm({ ...form, description: e.target.value })}
+            required
+          />
+        </div>
+
+        <div className="form-group">
+          <label>Categoria *</label>
+          <select
+            value={form.category}
+            onChange={e => setForm({ ...form, category: e.target.value })}
+            required
+          >
+            <option value="">Selecione uma categoria</option>
+            {categories[type].map(cat => (
+              <option key={cat} value={cat}>{cat}</option>
+            ))}
+          </select>
+        </div>
+
+        <div className="form-group">
+          <label>Valor *</label>
+          <input
+            type="number"
+            step="0.01"
+            min="0"
+            placeholder="0,00"
+            value={form.value}
+            onChange={e => setForm({ ...form, value: e.target.value })}
+            required
+          />
+        </div>
+
+        <div className="form-group">
+          <label>Data *</label>
+          <input
+            type="date"
+            value={form.date}
+            onChange={e => setForm({ ...form, date: e.target.value })}
+            required
+          />
+        </div>
+
+        <button type="submit" className="submit-btn">
+          {type === 'entrada' ? '💵 Cadastrar Entrada' : '💸 Cadastrar Despesa'}
+        </button>
+      </form>
+    </div>
+  );
+}
+
+// Relatórios mensais
+function Relatorios({ transactions }) {
+  const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7));
+  
+  // Garantir que transactions é sempre um array
+  const safeTransactions = Array.isArray(transactions) ? transactions : [];
+  
+  const monthlyData = safeTransactions.filter(t => 
+    t.date && t.date.startsWith(selectedMonth)
+  );
+
+  const entradas = monthlyData.filter(t => t.type === 'entrada');
+  const despesas = monthlyData.filter(t => t.type === 'despesa');
+  
+  const totalEntradas = entradas.reduce((sum, t) => sum + parseFloat(t.value || 0), 0);
+  const totalDespesas = despesas.reduce((sum, t) => sum + parseFloat(t.value || 0), 0);
+  
+  const categoriesData = {};
+  despesas.forEach(t => {
+    if (t.category) {
+      categoriesData[t.category] = (categoriesData[t.category] || 0) + parseFloat(t.value || 0);
+    }
+  });
+
+  const exportToExcel = () => {
+    // Criar dados para o Excel
+    const excelData = [];
+    
+    // Cabeçalho do relatório
+    excelData.push(['RELATÓRIO FINANCEIRO - ' + formatMonthYear(selectedMonth)]);
+    excelData.push(['']);
+    
+    // Resumo
+    excelData.push(['RESUMO DO MÊS']);
+    excelData.push(['Total de Entradas', 'R$ ' + totalEntradas.toFixed(2)]);
+    excelData.push(['Total de Despesas', 'R$ ' + totalDespesas.toFixed(2)]);
+    excelData.push(['Saldo do Mês', 'R$ ' + (totalEntradas - totalDespesas).toFixed(2)]);
+    excelData.push(['']);
+    
+    // Entradas detalhadas
+    if (entradas.length > 0) {
+      excelData.push(['ENTRADAS DETALHADAS']);
+      excelData.push(['Data', 'Descrição', 'Categoria', 'Valor']);
+      entradas.forEach(t => {
+        excelData.push([
+          new Date(t.date).toLocaleDateString('pt-BR'),
+          t.description,
+          t.category,
+          'R$ ' + parseFloat(t.value).toFixed(2)
+        ]);
+      });
+      excelData.push(['']);
+    }
+    
+    // Despesas detalhadas
+    if (despesas.length > 0) {
+      excelData.push(['DESPESAS DETALHADAS']);
+      excelData.push(['Data', 'Descrição', 'Categoria', 'Valor']);
+      despesas.forEach(t => {
+        excelData.push([
+          new Date(t.date).toLocaleDateString('pt-BR'),
+          t.description,
+          t.category,
+          'R$ ' + parseFloat(t.value).toFixed(2)
+        ]);
+      });
+      excelData.push(['']);
+    }
+    
+    // Despesas por categoria
+    if (Object.keys(categoriesData).length > 0) {
+      excelData.push(['DESPESAS POR CATEGORIA']);
+      excelData.push(['Categoria', 'Valor', 'Percentual']);
+      Object.entries(categoriesData).forEach(([category, value]) => {
+        excelData.push([
+          category,
+          'R$ ' + value.toFixed(2),
+          ((value / totalDespesas) * 100).toFixed(1) + '%'
+        ]);
+      });
+    }
+    
+    // Converter para CSV
+    const csvContent = excelData.map(row => 
+      row.map(cell => `"${cell}"`).join(',')
+    ).join('\n');
+    
+    // Criar e baixar arquivo
+    const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `relatorio_${selectedMonth}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const exportEntradas = () => {
+    if (entradas.length === 0) {
+      alert('Não há entradas para exportar neste período.');
+      return;
+    }
+
+    const excelData = [];
+    excelData.push(['RELATÓRIO DE ENTRADAS - ' + formatMonthYear(selectedMonth)]);
+    excelData.push(['']);
+    excelData.push(['Data', 'Descrição', 'Categoria', 'Valor']);
+    
+    entradas.forEach(t => {
+      excelData.push([
+        new Date(t.date).toLocaleDateString('pt-BR'),
+        t.description,
+        t.category,
+        'R$ ' + parseFloat(t.value).toFixed(2)
+      ]);
+    });
+    
+    excelData.push(['']);
+    excelData.push(['TOTAL DE ENTRADAS', '', '', 'R$ ' + totalEntradas.toFixed(2)]);
+    
+    const csvContent = excelData.map(row => 
+      row.map(cell => `"${cell}"`).join(',')
+    ).join('\n');
+    
+    const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `entradas_${selectedMonth}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const exportDespesas = () => {
+    if (despesas.length === 0) {
+      alert('Não há despesas para exportar neste período.');
+      return;
+    }
+
+    const excelData = [];
+    excelData.push(['RELATÓRIO DE DESPESAS - ' + formatMonthYear(selectedMonth)]);
+    excelData.push(['']);
+    excelData.push(['Data', 'Descrição', 'Categoria', 'Valor']);
+    
+    despesas.forEach(t => {
+      excelData.push([
+        new Date(t.date).toLocaleDateString('pt-BR'),
+        t.description,
+        t.category,
+        'R$ ' + parseFloat(t.value).toFixed(2)
+      ]);
+    });
+    
+    excelData.push(['']);
+    excelData.push(['TOTAL DE DESPESAS', '', '', 'R$ ' + totalDespesas.toFixed(2)]);
+    
+    const csvContent = excelData.map(row => 
+      row.map(cell => `"${cell}"`).join(',')
+    ).join('\n');
+    
+    const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `despesas_${selectedMonth}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const formatMonthYear = (monthStr) => {
+    const date = new Date(monthStr + '-01');
+    return date.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+  };
+
+  return (
+    <div className="relatorios">
+      <h2>📈 Relatórios Mensais</h2>
+      
+      <div className="month-selector">
+        <label>Selecionar Mês:</label>
+        <input
+          type="month"
+          value={selectedMonth}
+          onChange={e => setSelectedMonth(e.target.value)}
+        />
+      </div>
+
+      <div className="export-buttons">
+        <button onClick={exportToExcel} className="export-btn complete">
+          📊 Exportar Relatório Completo
+        </button>
+        <button onClick={exportEntradas} className="export-btn entradas">
+          💵 Exportar Entradas
+        </button>
+        <button onClick={exportDespesas} className="export-btn despesas">
+          💸 Exportar Despesas
+        </button>
+      </div>
+
+      <div className="report-summary">
+        <div className="summary-card">
+          <h3>Resumo do Mês</h3>
+          <p>💵 Entradas: R$ {totalEntradas.toFixed(2)}</p>
+          <p>💸 Despesas: R$ {totalDespesas.toFixed(2)}</p>
+          <p className={totalEntradas - totalDespesas >= 0 ? 'positive' : 'negative'}>
+            💰 Saldo: R$ {(totalEntradas - totalDespesas).toFixed(2)}
+          </p>
+        </div>
+      </div>
+
+      <div className="categories-report">
+        <h3>Gastos por Categoria</h3>
+        {Object.entries(categoriesData).length > 0 ? (
+          Object.entries(categoriesData).map(([category, value]) => (
+            <div key={category} className="category-item">
+              <span>{category}</span>
+              <span>R$ {value.toFixed(2)}</span>
+              <span>({totalDespesas > 0 ? ((value / totalDespesas) * 100).toFixed(1) : 0}%)</span>
+            </div>
+          ))
+        ) : (
+          <p>Nenhuma despesa encontrada para este mês.</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Histórico de transações
+function Historico({ transactions, onDelete }) {
+  const [filter, setFilter] = useState('all');
+  const [monthFilter, setMonthFilter] = useState('');
+
+  // Garantir que transactions é sempre um array
+  const safeTransactions = Array.isArray(transactions) ? transactions : [];
+
+  const filteredTransactions = safeTransactions.filter(t => {
+    const typeMatch = filter === 'all' || t.type === filter;
+    const monthMatch = !monthFilter || (t.date && t.date.startsWith(monthFilter));
+    return typeMatch && monthMatch;
+  }).reverse();
+
+  return (
+    <div className="historico">
+      <h2>📋 Histórico de Transações</h2>
+      
+      <div className="filters">
+        <select value={filter} onChange={e => setFilter(e.target.value)}>
+          <option value="all">Todas</option>
+          <option value="entrada">Entradas</option>
+          <option value="despesa">Despesas</option>
+        </select>
+        
+        <input
+          type="month"
+          value={monthFilter}
+          onChange={e => setMonthFilter(e.target.value)}
+          placeholder="Filtrar por mês"
+        />
+      </div>
+
+      <div className="transactions-list">
+        {filteredTransactions.length > 0 ? (
+          filteredTransactions.map(transaction => (
+            <div key={transaction.id} className={`transaction-card ${transaction.type}`}>
+              <div className="transaction-info">
+                <h4>{transaction.description}</h4>
+                <p>{transaction.category}</p>
+                <span className="date">{new Date(transaction.date).toLocaleDateString('pt-BR')}</span>
+              </div>
+              <div className="transaction-value">
+                <span className={`value ${transaction.type}`}>
+                  {transaction.type === 'entrada' ? '+' : '-'}R$ {parseFloat(transaction.value).toFixed(2)}
+                </span>
+                <button 
+                  onClick={() => {
+                    if (window.confirm('Deseja realmente excluir esta transação?')) {
+                      onDelete(transaction.id);
+                    }
+                  }}
+                  className="delete-btn"
+                >
+                  🗑️
+                </button>
+              </div>
+            </div>
+          ))
+        ) : (
+          <div className="no-transactions">
+            <p>Nenhuma transação encontrada.</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Adicionar componente de estatísticas para admin
+function AdminDashboard() {
+  const [stats, setStats] = useState({});
+  const [allTransactions, setAllTransactions] = useState([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    fetchAdminStats();
+    fetchAllTransactions();
+  }, []);
+
+  const fetchAdminStats = async () => {
+    try {
+      const response = await fetch('http://localhost:3001/admin/stats');
+      const data = await response.json();
+      setStats(data);
+    } catch (error) {
+      console.error('Erro ao buscar estatísticas:', error);
+    }
+  };
+
+  const fetchAllTransactions = async () => {
+    setLoading(true);
+    try {
+      const response = await fetch('http://localhost:3001/admin/all-transactions');
+      const data = await response.json();
+      setAllTransactions(data);
+    } catch (error) {
+      console.error('Erro ao buscar todas as transações:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="admin-dashboard">
+      <h2>📊 Dashboard Administrativo</h2>
+      
+      <div className="admin-stats">
+        <div className="stat-card">
+          <h3>👥 Total de Usuários</h3>
+          <p className="stat-value">{stats.totalUsers || 0}</p>
+        </div>
+        
+        <div className="stat-card">
+          <h3>📋 Total de Transações</h3>
+          <p className="stat-value">{stats.totalTransactions || 0}</p>
+        </div>
+        
+        <div className="stat-card">
+          <h3>💵 Total Entradas</h3>
+          <p className="stat-value positive">R$ {(stats.entrada || 0).toFixed(2)}</p>
+        </div>
+        
+        <div className="stat-card">
+          <h3>💸 Total Despesas</h3>
+          <p className="stat-value negative">R$ {(stats.despesa || 0).toFixed(2)}</p>
+        </div>
+      </div>
+
+      <div className="all-transactions">
+        <h3>Todas as Transações do Sistema</h3>
+        {loading ? (
+          <div className="loading">Carregando...</div>
+        ) : (
+          <div className="transactions-list">
+            {allTransactions.map(transaction => (
+              <div key={transaction.id} className={`transaction-card ${transaction.type} admin-view`}>
+                <div className="transaction-info">
+                  <h4>{transaction.description}</h4>
+                  <p>{transaction.category}</p>
+                  <span className="date">{new Date(transaction.date).toLocaleDateString('pt-BR')}</span>
+                  <span className="user-info">👤 {transaction.userName} ({transaction.userEmail})</span>
+                </div>
+                <div className="transaction-value">
+                  <span className={`value ${transaction.type}`}>
+                    {transaction.type === 'entrada' ? '+' : '-'}R$ {parseFloat(transaction.value).toFixed(2)}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export default App;
