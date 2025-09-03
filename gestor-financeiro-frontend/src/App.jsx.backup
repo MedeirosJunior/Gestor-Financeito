@@ -5,7 +5,9 @@ import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
 
 function App() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isAuthenticated, setIs        <h1>💰 Gestor Financeiro</h1>
+        <h2>🔐 Login</h2>
+        <form onSubmit={handleSubmit}>henticated] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
   const [activeTab, setActiveTab] = useState('dashboard');
   const [transactions, setTransactions] = useState([]);
@@ -21,6 +23,8 @@ function App() {
     }
   }, []);
 
+  // Buscar transações do servidor
+
   const fetchTransactions = async () => {
     setLoading(true);
     try {
@@ -35,10 +39,8 @@ function App() {
   };
 
   useEffect(() => {
-    if (isAuthenticated) {
-      fetchTransactions();
-    }
-  }, [isAuthenticated]);
+    fetchTransactions();
+  }, []);
 
   const addTransaction = async (transaction) => {
     try {
@@ -95,7 +97,7 @@ function App() {
                 onClick={() => setActiveTab('usuarios')}
                 title="Gerenciar Usuários"
               >
-                👥 Usuários
+                � Usuários
               </button>
             )}
             <button 
@@ -112,31 +114,31 @@ function App() {
             className={activeTab === 'dashboard' ? 'active' : ''} 
             onClick={() => setActiveTab('dashboard')}
           >
-            📊 Dashboard
+            � Dashboard
           </button>
           <button 
             className={activeTab === 'entradas' ? 'active' : ''} 
             onClick={() => setActiveTab('entradas')}
           >
-            💵 Entradas
+            � Entradas
           </button>
           <button 
             className={activeTab === 'despesas' ? 'active' : ''} 
             onClick={() => setActiveTab('despesas')}
           >
-            💸 Despesas
+            � Despesas
           </button>
           <button 
             className={activeTab === 'relatorios' ? 'active' : ''} 
             onClick={() => setActiveTab('relatorios')}
           >
-            📈 Relatórios
+            � Relatórios
           </button>
           <button 
             className={activeTab === 'historico' ? 'active' : ''} 
             onClick={() => setActiveTab('historico')}
           >
-            📋 Histórico
+            � Histórico
           </button>
         </nav>
       </header>
@@ -225,7 +227,7 @@ function Login({ onLogin }) {
     <div className="login-container">
       <div className="login-box">
         <h1>💰 Gestor Financeiro</h1>
-        <h2>🔐 Login</h2>
+        <h2>{isRegisterMode ? '� Cadastro' : '�🔐 Login'}</h2>
         <form onSubmit={handleSubmit}>
           <div className="form-group">
             <label>👤 Email:</label>
@@ -429,34 +431,39 @@ function Dashboard({ transactions }) {
     .reduce((sum, t) => sum + parseFloat(t.value), 0);
     
   const saldo = totalEntradas - totalDespesas;
+  const monthName = new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
 
   return (
     <div className="dashboard">
-      <h2>📊 Dashboard - {new Date().toLocaleDateString('pt-BR', { year: 'numeric', month: 'long' })}</h2>
+      <h2>Dashboard - {monthName}</h2>
       
       <div className="cards">
-        <div className="card entradas">
-          <h3>💵 Entradas</h3>
-          <p>R$ {totalEntradas.toFixed(2)}</p>
+        <div className="card entrada">
+          <h3>💵 Total Entradas</h3>
+          <p className="value">R$ {totalEntradas.toFixed(2)}</p>
         </div>
         
-        <div className="card despesas">
-          <h3>💸 Despesas</h3>
-          <p>R$ {totalDespesas.toFixed(2)}</p>
+        <div className="card despesa">
+          <h3>💸 Total Despesas</h3>
+          <p className="value">R$ {totalDespesas.toFixed(2)}</p>
         </div>
         
-        <div className={`card saldo ${saldo >= 0 ? 'positive' : 'negative'}`}>
+        <div className={`card saldo ${saldo >= 0 ? 'positivo' : 'negativo'}`}>
           <h3>💰 Saldo</h3>
-          <p>R$ {saldo.toFixed(2)}</p>
+          <p className="value">R$ {saldo.toFixed(2)}</p>
         </div>
       </div>
 
       <div className="recent-transactions">
         <h3>Últimas Transações</h3>
-        {transactions.slice(-5).reverse().map(transaction => (
+        {monthlyTransactions.slice(-5).reverse().map(transaction => (
           <div key={transaction.id} className={`transaction-item ${transaction.type}`}>
-            <span>{transaction.description}</span>
-            <span>{transaction.type === 'entrada' ? '+' : '-'}R$ {parseFloat(transaction.value).toFixed(2)}</span>
+            <span className="date">{new Date(transaction.date).toLocaleDateString('pt-BR')}</span>
+            <span className="description">{transaction.description}</span>
+            <span className="category">{transaction.category}</span>
+            <span className="value">
+              {transaction.type === 'entrada' ? '+' : '-'}R$ {parseFloat(transaction.value).toFixed(2)}
+            </span>
           </div>
         ))}
       </div>
@@ -464,38 +471,42 @@ function Dashboard({ transactions }) {
   );
 }
 
-// Formulário de lançamento
+// Formulário para lançamentos
 function LancamentoForm({ type, onAdd, title }) {
   const [form, setForm] = useState({
+    type: type,
     description: '',
     value: '',
-    category: '',
-    date: new Date().toISOString().slice(0, 10)
+    date: new Date().toISOString().slice(0, 10),
+    category: ''
   });
 
-  const categorias = type === 'entrada' 
-    ? ['Salário', 'Freelance', 'Investimentos', 'Outros']
-    : ['Alimentação', 'Transporte', 'Moradia', 'Saúde', 'Lazer', 'Outros'];
+  const categories = {
+    entrada: ['Salário', 'Freelance', 'Investimentos', 'Vendas', 'Outros'],
+    despesa: ['Alimentação', 'Transporte', 'Moradia', 'Saúde', 'Educação', 'Lazer', 'Outros']
+  };
 
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!form.description || !form.value || !form.category) {
-      alert('Preencha todos os campos!');
+      alert('Preencha todos os campos obrigatórios');
       return;
     }
-
+    
     onAdd({
       ...form,
-      type,
       value: parseFloat(form.value)
     });
-
+    
     setForm({
+      type: type,
       description: '',
       value: '',
-      category: '',
-      date: new Date().toISOString().slice(0, 10)
+      date: new Date().toISOString().slice(0, 10),
+      category: ''
     });
+    
+    alert(`${type === 'entrada' ? 'Entrada' : 'Despesa'} cadastrada com sucesso!`);
   };
 
   return (
@@ -504,54 +515,55 @@ function LancamentoForm({ type, onAdd, title }) {
       
       <form onSubmit={handleSubmit}>
         <div className="form-group">
-          <label>Descrição:</label>
+          <label>Descrição *</label>
           <input
             type="text"
+            placeholder="Ex: Supermercado, Salário..."
             value={form.description}
-            onChange={e => setForm({...form, description: e.target.value})}
-            placeholder="Ex: Salário, Supermercado..."
+            onChange={e => setForm({ ...form, description: e.target.value })}
             required
           />
         </div>
 
         <div className="form-group">
-          <label>Valor:</label>
-          <input
-            type="number"
-            step="0.01"
-            value={form.value}
-            onChange={e => setForm({...form, value: e.target.value})}
-            placeholder="0.00"
-            required
-          />
-        </div>
-
-        <div className="form-group">
-          <label>Categoria:</label>
+          <label>Categoria *</label>
           <select
             value={form.category}
-            onChange={e => setForm({...form, category: e.target.value})}
+            onChange={e => setForm({ ...form, category: e.target.value })}
             required
           >
             <option value="">Selecione uma categoria</option>
-            {categorias.map(cat => (
+            {categories[type].map(cat => (
               <option key={cat} value={cat}>{cat}</option>
             ))}
           </select>
         </div>
 
         <div className="form-group">
-          <label>Data:</label>
+          <label>Valor *</label>
+          <input
+            type="number"
+            step="0.01"
+            min="0"
+            placeholder="0,00"
+            value={form.value}
+            onChange={e => setForm({ ...form, value: e.target.value })}
+            required
+          />
+        </div>
+
+        <div className="form-group">
+          <label>Data *</label>
           <input
             type="date"
             value={form.date}
-            onChange={e => setForm({...form, date: e.target.value})}
+            onChange={e => setForm({ ...form, date: e.target.value })}
             required
           />
         </div>
 
         <button type="submit" className="submit-btn">
-          Lançar {type === 'entrada' ? 'Entrada' : 'Despesa'}
+          {type === 'entrada' ? '💵 Cadastrar Entrada' : '💸 Cadastrar Despesa'}
         </button>
       </form>
     </div>
