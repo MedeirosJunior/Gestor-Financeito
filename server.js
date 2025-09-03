@@ -5,13 +5,29 @@ const path = require('path');
 const app = express();
 const port = process.env.PORT || 3001;
 
-app.use(cors());
+// Configurar CORS para permitir frontend separado
+const corsOptions = {
+  origin: [
+    'http://localhost:3000',
+    'https://gestor-financeito.netlify.app',
+    'https://gestor-financeito.vercel.app',
+    process.env.FRONTEND_URL
+  ].filter(Boolean),
+  credentials: true,
+  optionsSuccessStatus: 200
+};
+
+app.use(cors(corsOptions));
 app.use(express.json());
 
-// Servir arquivos estáticos do React build (apenas em produção)
-if (process.env.NODE_ENV === 'production') {
-  app.use(express.static(path.join(__dirname, 'gestor-financeiro-frontend/build')));
-}
+// Rota de health check para API
+app.get('/api/health', (req, res) => {
+  res.json({ 
+    status: 'OK', 
+    message: 'Gestor Financeiro API funcionando!',
+    timestamp: new Date().toISOString()
+  });
+});
 
 // Criar/conectar ao banco de dados
 const db = new sqlite3.Database('./financeiro.db');
@@ -409,40 +425,14 @@ app.get('/debug/users', (req, res) => {
   });
 });
 
-// Servir o React app para todas as outras rotas (SPA routing)
-if (process.env.NODE_ENV === 'production') {
-  const fs = require('fs');
-  const buildPath = path.join(__dirname, 'gestor-financeiro-frontend/build/index.html');
-  
-  app.use((req, res, next) => {
-    // Se a requisição não for para uma rota da API, servir o React app
-    if (!req.path.startsWith('/api') && !req.path.startsWith('/debug')) {
-      // Verificar se o arquivo build existe
-      if (fs.existsSync(buildPath)) {
-        res.sendFile(buildPath);
-      } else {
-        console.error('❌ Build do frontend não encontrado:', buildPath);
-        res.status(404).send(`
-          <html>
-            <body>
-              <h1>Aplicação em Deploy</h1>
-              <p>O frontend está sendo construído. Aguarde alguns minutos e recarregue a página.</p>
-              <p>Build path: ${buildPath}</p>
-            </body>
-          </html>
-        `);
-      }
-    } else {
-      next();
-    }
-  });
-}
-
 app.listen(port, () => {
-  console.log(`🚀 Servidor rodando em http://localhost:${port}`);
-  console.log(`📊 API do Gestor Financeiro iniciada com sucesso!`);
+  console.log(`🚀 API do Gestor Financeiro rodando em http://localhost:${port}`);
+  console.log(`📊 Backend iniciado com sucesso!`);
+  console.log(`🌐 CORS configurado para: ${corsOptions.origin.join(', ')}`);
   
   if (process.env.NODE_ENV !== 'production') {
-    console.log(`🎯 Frontend será iniciado em: http://localhost:3000`);
+    console.log(`🎯 Frontend deve rodar em: http://localhost:3000`);
+  } else {
+    console.log(`🌍 Frontend em produção: ${process.env.FRONTEND_URL || 'https://gestor-financeito.netlify.app'}`);
   }
 });

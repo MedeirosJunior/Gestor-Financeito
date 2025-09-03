@@ -1,10 +1,12 @@
 services:
   - type: web
-    name: gestor-financeito
+    name: gestor-financeito-api
     env: node
     plan: free
-    buildCommand: npm install && cd gestor-financeiro-frontend && npm install && npm run build && cd ..
+    buildCommand: npm install
     startCommand: npm start
     envVars:
       - key: NODE_ENV
         value: production
+      - key: FRONTEND_URL
+        value: https://gestor-financeito.netlify.app

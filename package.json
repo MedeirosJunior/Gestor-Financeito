@@ -5,11 +5,8 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "concurrently \"npm run backend\" \"npm run frontend\"",
-    "backend": "node server.js",
-    "frontend": "cd gestor-financeiro-frontend && npm run dev",
-    "build": "cd gestor-financeiro-frontend && npm install && npm run build",
-    "install-all": "npm install && cd gestor-financeiro-frontend && npm install"
+    "dev": "node server.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
   },
   "engines": {
     "node": ">=18.0.0",
