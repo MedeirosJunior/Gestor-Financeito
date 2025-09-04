@@ -1,10 +1,12 @@
 // Configuração da API para diferentes ambientes
 const config = {
   development: {
-    API_URL: 'http://localhost:3001'
+    API_URL: 'http://localhost:3001',
+    ALLOW_OFFLINE: true // Permite modo offline em desenvolvimento
   },
   production: {
-    API_URL: process.env.REACT_APP_API_URL || 'https://gestor-financeito-api.onrender.com'
+    API_URL: process.env.REACT_APP_API_URL || 'https://gestor-financeito.onrender.com',
+    ALLOW_OFFLINE: false // Força conexão com servidor em produção
   }
 };
 
