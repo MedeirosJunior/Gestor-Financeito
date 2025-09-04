@@ -80,15 +80,6 @@ function App() {
   };
 
   // Funções para despesas recorrentes
-  const fetchRecurringExpenses = () => {
-    const saved = localStorage.getItem('recurringExpenses');
-    if (saved) {
-      const expenses = JSON.parse(saved);
-      setRecurringExpenses(expenses);
-      checkDueExpenses(expenses);
-    }
-  };
-
   const saveRecurringExpenses = (expenses) => {
     localStorage.setItem('recurringExpenses', JSON.stringify(expenses));
     setRecurringExpenses(expenses);
