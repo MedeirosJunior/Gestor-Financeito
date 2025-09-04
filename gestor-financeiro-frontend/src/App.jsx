@@ -3,6 +3,8 @@ import './App.css';
 import config from './config';
 import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
+import { toast, ToastContainer } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -50,8 +52,10 @@ function App() {
         body: JSON.stringify(transaction),
       });
       fetchTransactions();
+      toast.success(`${transaction.type === 'entrada' ? 'Receita' : 'Despesa'} adicionada com sucesso!`);
     } catch (error) {
       console.error('Erro ao adicionar transação:', error);
+      toast.error('Erro ao adicionar transação. Tente novamente.');
     }
   };
 
@@ -61,14 +65,17 @@ function App() {
         method: 'DELETE',
       });
       fetchTransactions();
+      toast.success('Transação excluída com sucesso!');
     } catch (error) {
       console.error('Erro ao deletar transação:', error);
+      toast.error('Erro ao excluir transação. Tente novamente.');
     }
   };
 
   const handleLogin = (user) => {
     setIsAuthenticated(true);
     setCurrentUser(user);
+    toast.success(`Bem-vindo, ${user.name}!`);
   };
 
   const handleLogout = () => {
@@ -77,6 +84,7 @@ function App() {
     localStorage.removeItem('isAuthenticated');
     localStorage.removeItem('currentUser');
     setActiveTab('dashboard');
+    toast.info('Logout realizado com sucesso!');
   };
 
   // Funções para despesas recorrentes
@@ -95,11 +103,13 @@ function App() {
     };
     const updated = [...recurringExpenses, newExpense];
     saveRecurringExpenses(updated);
+    toast.success('Despesa recorrente adicionada com sucesso!');
   };
 
   const deleteRecurringExpense = (id) => {
     const updated = recurringExpenses.filter(expense => expense.id !== id);
     saveRecurringExpenses(updated);
+    toast.success('Despesa recorrente excluída com sucesso!');
   };
 
   // Calcular próxima data de vencimento
@@ -356,7 +366,7 @@ function Login({ onLogin }) {
       localStorage.setItem('isAuthenticated', 'true');
       localStorage.setItem('currentUser', JSON.stringify(user));
     } else {
-      alert('Usuário ou senha incorretos!');
+      toast.error('Usuário ou senha incorretos!');
     }
   };
 
@@ -648,6 +658,10 @@ function DespesasRecorrentes({ expenses, onAdd, onDelete }) {
   const handleSubmit = (e) => {
     e.preventDefault();
     if (form.description && form.value && form.category) {
+      if (parseFloat(form.value) <= 0) {
+        toast.error('O valor deve ser maior que zero!');
+        return;
+      }
       onAdd({
         ...form,
         value: parseFloat(form.value),
@@ -661,6 +675,8 @@ function DespesasRecorrentes({ expenses, onAdd, onDelete }) {
         recurrence: 'monthly',
         startDate: new Date().toISOString().slice(0, 10)
       });
+    } else {
+      toast.error('Preencha todos os campos obrigatórios!');
     }
   };
 
@@ -772,7 +788,12 @@ function LancamentoForm({ type, onAdd, title }) {
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!form.description || !form.value || !form.category) {
-      alert('Preencha todos os campos!');
+      toast.error('Preencha todos os campos obrigatórios!');
+      return;
+    }
+
+    if (parseFloat(form.value) <= 0) {
+      toast.error('O valor deve ser maior que zero!');
       return;
     }
 
@@ -919,6 +940,7 @@ function Relatorios({ transactions }) {
     const buffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
     const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
     saveAs(blob, `relatorio-financeiro-${selectedMonth}.xlsx`);
+    toast.success('Relatório Excel exportado com sucesso!');
   };
 
   // Função para exportar para CSV
@@ -939,6 +961,7 @@ function Relatorios({ transactions }) {
     const csv = csvData.map(row => row.join(',')).join('\n');
     const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
     saveAs(blob, `transacoes-${selectedMonth}.csv`);
+    toast.success('Relatório CSV exportado com sucesso!');
   };
 
   return (
@@ -1079,6 +1102,20 @@ function Historico({ transactions, onDelete }) {
           </div>
         ))}
       </div>
+      
+      {/* Container de Notificações Toast */}
+      <ToastContainer
+        position="top-right"
+        autoClose={3000}
+        hideProgressBar={false}
+        newestOnTop={false}
+        closeOnClick
+        rtl={false}
+        pauseOnFocusLoss
+        draggable
+        pauseOnHover
+        theme="light"
+      />
     </div>
   );
 }
