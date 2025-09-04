@@ -5,7 +5,7 @@
 
 [build.environment]
   NODE_VERSION = "18.18.0"
-  REACT_APP_API_URL = "https://gestor-financeito-api.onrender.com"
+  REACT_APP_API_URL = "https://gestor-financeito.onrender.com"
 
 [[redirects]]
   from = "/*"

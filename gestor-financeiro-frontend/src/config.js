@@ -1,7 +1,7 @@
 // Configuração da API para diferentes ambientes
 const config = {
   development: {
-    API_URL: 'http://localhost:3001',
+    API_URL: 'https://gestor-financeito.onrender.com', // Usar API do Render em desenvolvimento também
     ALLOW_OFFLINE: true // Permite modo offline em desenvolvimento
   },
   production: {

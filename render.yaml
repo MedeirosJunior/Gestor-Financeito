@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: gestor-financeito-api
+    name: gestor-financeito
     env: node
     plan: free
     buildCommand: npm install
