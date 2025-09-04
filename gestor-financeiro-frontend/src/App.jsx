@@ -292,13 +292,37 @@ function App() {
   const [categories, setCategories] = useState(CategoryManager.defaultCategories);
   const [customCategories, setCustomCategories] = useState({ entrada: [], despesa: [] });
 
-  // Verificar autenticação no localStorage
+  // Verificar autenticação no localStorage com validação mais rigorosa
   useEffect(() => {
     const authStatus = localStorage.getItem('isAuthenticated');
     const userData = localStorage.getItem('currentUser');
-    if (authStatus === 'true' && userData) {
-      setIsAuthenticated(true);
-      setCurrentUser(JSON.parse(userData));
+    const authTimestamp = localStorage.getItem('authTimestamp');
+    
+    // Verificar se a autenticação é válida e não expirou (24 horas)
+    if (authStatus === 'true' && userData && authTimestamp) {
+      const now = new Date().getTime();
+      const authTime = parseInt(authTimestamp);
+      const twentyFourHours = 24 * 60 * 60 * 1000; // 24 horas em ms
+      
+      if (now - authTime < twentyFourHours) {
+        try {
+          const user = JSON.parse(userData);
+          setIsAuthenticated(true);
+          setCurrentUser(user);
+        } catch (error) {
+          console.error('Erro ao fazer parse dos dados do usuário:', error);
+          // Limpar dados corrompidos
+          localStorage.removeItem('isAuthenticated');
+          localStorage.removeItem('currentUser');
+          localStorage.removeItem('authTimestamp');
+        }
+      } else {
+        // Sessão expirada - limpar dados
+        localStorage.removeItem('isAuthenticated');
+        localStorage.removeItem('currentUser');
+        localStorage.removeItem('authTimestamp');
+        toast.info('Sessão expirada. Faça login novamente.');
+      }
     }
   }, []);
 
@@ -666,6 +690,7 @@ function App() {
       // Salvar dados do usuário de forma segura
       localStorage.setItem('isAuthenticated', 'true');
       localStorage.setItem('currentUser', JSON.stringify(sanitizedUser));
+      localStorage.setItem('authTimestamp', new Date().getTime().toString());
       
       toast.success(`Bem-vindo, ${sanitizedUser.name}!`);
     } catch (error) {
@@ -680,6 +705,7 @@ function App() {
       setCurrentUser(null);
       localStorage.removeItem('isAuthenticated');
       localStorage.removeItem('currentUser');
+      localStorage.removeItem('authTimestamp');
       setActiveTab('dashboard');
       toast.info('Logout realizado com sucesso!');
     } catch (error) {
@@ -1116,6 +1142,7 @@ const Login = React.memo(({ onLogin, loadingAuth, setLoadingAuth }) => {
         onLogin(user);
         localStorage.setItem('isAuthenticated', 'true');
         localStorage.setItem('currentUser', JSON.stringify(user));
+        localStorage.setItem('authTimestamp', new Date().getTime().toString());
       } else {
         toast.error('Usuário ou senha incorretos!');
       }

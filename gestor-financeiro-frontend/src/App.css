@@ -17,6 +17,13 @@ body {
   padding: 20px;
 }
 
+/* Mobile improvements */
+@media (max-width: 768px) {
+  .app {
+    padding: 12px;
+  }
+}
+
 .header {
   background: white;
   border-radius: 16px;
@@ -26,11 +33,41 @@ body {
   border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
+/* Mobile responsive header */
+@media (max-width: 768px) {
+  .header {
+    padding: 16px;
+    margin-bottom: 16px;
+    border-radius: 12px;
+  }
+}
+
 .header-content {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 24px;
+}
+
+/* Mobile responsive header content */
+@media (max-width: 768px) {
+  .header-content {
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+  
+  .user-info {
+    order: 2;
+    font-size: 0.875rem;
+  }
+  
+  .logout-btn {
+    order: 1;
+    align-self: flex-end;
+    font-size: 0.8rem;
+    padding: 6px 12px;
+  }
 }
 
 .user-info {
@@ -66,6 +103,14 @@ body {
   letter-spacing: -0.025em;
 }
 
+/* Mobile responsive header title */
+@media (max-width: 768px) {
+  .header h1 {
+    font-size: 1.5rem;
+    margin-bottom: 16px;
+  }
+}
+
 .nav {
   display: flex;
   gap: 8px;
@@ -74,6 +119,23 @@ body {
   background: #f1f5f9;
   padding: 8px;
   border-radius: 12px;
+}
+
+/* Mobile responsive navigation */
+@media (max-width: 768px) {
+  .nav {
+    gap: 4px;
+    padding: 6px;
+    overflow-x: auto;
+    justify-content: flex-start;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  
+  .nav::-webkit-scrollbar {
+    display: none;
+  }
 }
 
 .nav button {
@@ -89,6 +151,17 @@ body {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+/* Mobile responsive nav buttons */
+@media (max-width: 768px) {
+  .nav button {
+    padding: 10px 16px;
+    font-size: 0.8rem;
+    gap: 6px;
+    white-space: nowrap;
+    min-width: auto;
+  }
 }
 
 .nav button:hover {
@@ -112,6 +185,15 @@ body {
   min-height: 500px;
 }
 
+/* Mobile responsive main content */
+@media (max-width: 768px) {
+  .main {
+    padding: 20px;
+    border-radius: 12px;
+    min-height: 400px;
+  }
+}
+
 .loading {
   text-align: center;
   padding: 48px;
@@ -132,6 +214,15 @@ body {
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: 24px;
   margin-bottom: 40px;
+}
+
+/* Mobile responsive cards */
+@media (max-width: 768px) {
+  .cards {
+    grid-template-columns: 1fr;
+    gap: 16px;
+    margin-bottom: 24px;
+  }
 }
 
 .card {
@@ -218,6 +309,39 @@ body {
   transition: all 0.2s ease;
 }
 
+/* Mobile responsive transaction items */
+@media (max-width: 768px) {
+  .transaction-item {
+    grid-template-columns: 1fr;
+    gap: 8px;
+    padding: 12px;
+    position: relative;
+  }
+  
+  .transaction-item .date {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    font-size: 0.75rem;
+  }
+  
+  .transaction-item .description {
+    margin-top: 0;
+    font-size: 0.9rem;
+  }
+  
+  .transaction-item .category {
+    display: inline-block;
+    width: auto;
+    margin-bottom: 4px;
+  }
+  
+  .transaction-item .value {
+    text-align: left;
+    font-size: 1.1rem;
+  }
+}
+
 .transaction-item:hover {
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
   border-color: #cbd5e1;
@@ -259,6 +383,16 @@ body {
   transition: all 0.3s ease;
 }
 
+/* Mobile responsive form */
+@media (max-width: 768px) {
+  .lancamento-form {
+    max-width: 100%;
+    margin: 0;
+    border-radius: 12px;
+    padding: 16px;
+  }
+}
+
 .lancamento-form.disabled {
   opacity: 0.6;
   background: #f8f9fa;
@@ -292,6 +426,13 @@ body {
   margin-bottom: 24px;
 }
 
+/* Mobile responsive form groups */
+@media (max-width: 768px) {
+  .form-group {
+    margin-bottom: 16px;
+  }
+}
+
 .form-group label {
   display: block;
   margin-bottom: 8px;
@@ -309,6 +450,18 @@ body {
   font-size: 1rem;
   transition: all 0.2s ease;
   background: white;
+}
+
+/* Mobile responsive form inputs */
+@media (max-width: 768px) {
+  .form-group input,
+  .form-group select {
+    padding: 14px 16px;
+    font-size: 16px; /* Previne zoom no iOS */
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+  }
 }
 
 .form-group input:disabled,
@@ -348,6 +501,16 @@ body {
   align-items: center;
   justify-content: center;
   gap: 8px;
+}
+
+/* Mobile responsive submit button */
+@media (max-width: 768px) {
+  .submit-btn {
+    padding: 18px 16px;
+    font-size: 1.1rem;
+    border-radius: 10px;
+    min-height: 48px; /* Tamanho mínimo recomendado para touch */
+  }
 }
 
 .submit-btn:disabled {
@@ -1126,6 +1289,46 @@ body {
   .header-content {
     flex-direction: column;
     gap: 16px;
+  }
+}
+
+/* Melhorias gerais para mobile */
+@media (max-width: 768px) {
+  /* Melhor experiência touch */
+  * {
+    -webkit-tap-highlight-color: rgba(0, 0, 0, 0.1);
+  }
+  
+  /* Scroll suave em containers */
+  .nav, .recent-transactions {
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  /* Tamanhos mínimos para elementos tocáveis */
+  button, .nav button, .logout-btn {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  
+  /* Ajustes de espaçamento geral */
+  .dashboard h2 {
+    font-size: 1.25rem;
+    margin-bottom: 20px;
+  }
+  
+  /* Melhor visualização de valores em cards */
+  .card .value {
+    font-size: 1.75rem;
+  }
+  
+  /* Ajustes para listas de transações */
+  .recent-transactions {
+    padding: 16px;
+  }
+  
+  .recent-transactions h3 {
+    font-size: 1rem;
+    margin-bottom: 12px;
   }
 }
 
