@@ -20,7 +20,42 @@ body {
 /* Mobile improvements */
 @media (max-width: 768px) {
   .app {
-    padding: 12px;
+    padding: 8px;
+  }
+  
+  .header {
+    padding: 16px;
+    margin-bottom: 16px;
+  }
+  
+  .header h1 {
+    font-size: 1.5rem;
+    margin-bottom: 16px;
+  }
+  
+  .main {
+    padding: 16px;
+  }
+  
+  .nav {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  
+  .nav::-webkit-scrollbar {
+    display: none;
+  }
+  
+  .nav button {
+    min-width: 80px;
+    white-space: nowrap;
+    font-size: 0.8rem;
+  }
+  
+  .cards {
+    gap: 12px;
   }
 }
 
