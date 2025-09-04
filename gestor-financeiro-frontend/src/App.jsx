@@ -144,14 +144,18 @@ const ConnectivityUtils = {
   // Verificar se a API está disponível
   checkApiHealth: async () => {
     try {
+      console.log('Testando conexão com API...');
       const response = await fetch(`${config.API_URL}/api/health`, {
         method: 'GET',
         headers: { 'Content-Type': 'application/json' },
-        signal: AbortSignal.timeout(5000) // Timeout de 5 segundos
+        signal: AbortSignal.timeout(10000) // Timeout de 10 segundos
       });
-      return response.ok;
+      
+      const isAvailable = response.ok;
+      console.log('Resultado do teste de API:', isAvailable ? 'DISPONÍVEL' : 'INDISPONÍVEL');
+      return isAvailable;
     } catch (error) {
-      console.log('API não disponível:', error.message);
+      console.error('API não disponível:', error.message);
       return false;
     }
   },
@@ -329,22 +333,43 @@ function App() {
   // Verificar disponibilidade da API na inicialização
   useEffect(() => {
     const checkApi = async () => {
-      console.log('Verificando disponibilidade da API...');
-      const available = await ConnectivityUtils.checkApiHealth();
-      setIsApiAvailable(available);
-      setApiChecked(true);
+      console.log('=== VERIFICANDO DISPONIBILIDADE DA API ===');
+      setApiChecked(false);
       
-      if (available) {
-        console.log('API disponível - sistema operacional');
-        toast.success('Conectado ao servidor!', { autoClose: 2000 });
-      } else {
-        console.log('API indisponível - sistema bloqueado');
-        toast.error('Servidor indisponível. Operações bloqueadas até restabelecer conexão.', { autoClose: 5000 });
+      try {
+        const available = await ConnectivityUtils.checkApiHealth();
+        console.log('Resultado final da verificação:', available);
+        
+        setIsApiAvailable(available);
+        setApiChecked(true);
+        
+        if (available) {
+          console.log('✅ API disponível - sistema operacional');
+          toast.success('Conectado ao servidor!', { autoClose: 2000 });
+        } else {
+          console.log('❌ API indisponível - sistema bloqueado');
+          toast.error('Servidor indisponível. Verifique sua conexão.', { autoClose: 5000 });
+        }
+      } catch (error) {
+        console.error('Erro ao verificar API:', error);
+        setIsApiAvailable(false);
+        setApiChecked(true);
+        toast.error('Erro ao conectar com o servidor.', { autoClose: 5000 });
       }
     };
     
     checkApi();
-  }, []);
+    
+    // Recheck API a cada 30 segundos se estiver offline
+    const interval = setInterval(() => {
+      if (!isApiAvailable) {
+        console.log('Recheck da API...');
+        checkApi();
+      }
+    }, 30000);
+    
+    return () => clearInterval(interval);
+  }, [isApiAvailable]);
 
   // Carregar categorias personalizadas na inicialização
   useEffect(() => {
@@ -510,9 +535,14 @@ function App() {
 
   // Otimizar fetchTransactions com useCallback
   const fetchTransactions = useCallback(async () => {
+    console.log('=== CARREGANDO TRANSAÇÕES ===');
+    console.log('API disponível:', isApiAvailable);
+    console.log('API checada:', apiChecked);
+    console.log('Usuário:', currentUser?.username);
+    
     // Se API não está disponível, não carregar nada
     if (!isApiAvailable || !apiChecked) {
-      console.log('API indisponível - não é possível carregar transações');
+      console.log('❌ API indisponível - não é possível carregar transações');
       if (apiChecked) {
         toast.error('Conexão com servidor necessária para carregar dados.');
       }
@@ -520,12 +550,14 @@ function App() {
     }
 
     if (!currentUser?.username) {
-      console.log('Usuário não logado');
+      console.log('❌ Usuário não logado');
       return;
     }
 
     setLoading(true);
     try {
+      console.log('📡 Fazendo requisição para:', `${config.API_URL}/transactions?userId=${encodeURIComponent(currentUser.username)}`);
+      
       const response = await fetch(`${config.API_URL}/transactions?userId=${encodeURIComponent(currentUser.username)}`);
       
       if (!response.ok) {
@@ -533,14 +565,16 @@ function App() {
       }
       
       const data = await response.json();
+      console.log('📥 Dados recebidos:', data);
       
       if (!Array.isArray(data)) {
         throw new Error('Formato de dados inválido recebido do servidor');
       }
       
       setTransactions(data);
+      console.log('✅ Transações carregadas com sucesso:', data.length, 'itens');
     } catch (error) {
-      console.error('Erro ao buscar transações da API:', error);
+      console.error('❌ Erro ao buscar transações da API:', error);
       setIsApiAvailable(false); // Marcar API como indisponível
       ErrorHandler.handleApiError(error, 'buscar transações');
       setTransactions([]); // Limpar transações em caso de erro
