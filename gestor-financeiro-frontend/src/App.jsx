@@ -603,7 +603,7 @@ function App() {
     } finally {
       setLoadingTransactions(false);
     }
-  }, [fetchTransactions, categories, isApiAvailable, currentUser, transactions]);
+  }, [fetchTransactions, categories, isApiAvailable, currentUser]);
 
   // Otimizar deleteTransaction com useCallback
   const deleteTransaction = useCallback(async (id) => {
