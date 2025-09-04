@@ -538,7 +538,7 @@ function App() {
     console.log('=== CARREGANDO TRANSAÇÕES ===');
     console.log('API disponível:', isApiAvailable);
     console.log('API checada:', apiChecked);
-    console.log('Usuário:', currentUser?.username);
+    console.log('Usuário:', currentUser?.email);
     
     // Se API não está disponível, não carregar nada
     if (!isApiAvailable || !apiChecked) {
@@ -549,7 +549,7 @@ function App() {
       return;
     }
 
-    if (!currentUser?.username) {
+    if (!currentUser?.email) {
       console.log('❌ Usuário não logado');
       return;
     }
@@ -684,7 +684,7 @@ function App() {
 
     setLoadingTransactions(true);
     try {
-      console.log('🗑️ Tentando excluir transação:', id, 'para usuário:', currentUser.username);
+      console.log('🗑️ Tentando excluir transação:', id, 'para usuário:', currentUser.email);
       
       const response = await fetch(`${config.API_URL}/transactions/${id}?userId=${encodeURIComponent(currentUser.email)}`, {
         method: 'DELETE',
