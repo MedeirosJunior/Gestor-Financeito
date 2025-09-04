@@ -684,20 +684,37 @@ function App() {
 
     setLoadingTransactions(true);
     try {
+      console.log('🗑️ Tentando excluir transação:', id, 'para usuário:', currentUser.username);
+      
       const response = await fetch(`${config.API_URL}/transactions/${id}?userId=${encodeURIComponent(currentUser.username)}`, {
         method: 'DELETE',
       });
 
       if (!response.ok) {
+        if (response.status === 403) {
+          toast.error('Você não tem permissão para excluir esta transação. Ela pode pertencer a outro usuário.');
+          return;
+        } else if (response.status === 404) {
+          toast.error('Transação não encontrada. Ela pode já ter sido excluída.');
+          fetchTransactions(); // Atualizar lista para refletir estado atual
+          return;
+        }
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
 
       fetchTransactions();
       toast.success('Transação excluída com sucesso!');
     } catch (error) {
-      console.error('Erro ao excluir transação via API:', error);
-      setIsApiAvailable(false); // Marcar API como indisponível
-      ErrorHandler.handleApiError(error, 'excluir transação');
+      console.error('❌ Erro ao excluir transação via API:', error);
+      if (error.message.includes('403')) {
+        toast.error('Acesso negado: você só pode excluir suas próprias transações.');
+      } else if (error.message.includes('404')) {
+        toast.error('Transação não encontrada.');
+        fetchTransactions(); // Atualizar lista
+      } else {
+        setIsApiAvailable(false); // Marcar API como indisponível apenas para erros de rede
+        ErrorHandler.handleApiError(error, 'excluir transação');
+      }
     } finally {
       setLoadingTransactions(false);
     }
@@ -2126,7 +2143,7 @@ const Historico = React.memo(({ transactions, onDelete, isApiAvailable }) => {
   // Implementar debounce na busca
   const debouncedSearchTerm = useDebounce(searchTerm, 300);
 
-  // Otimizar filtros com useMemo incluindo busca
+  // Otimizar filtros com useMemo incluindo busca e validação de usuário
   const filteredTransactions = useMemo(() => 
     transactions.filter(t => {
       const typeMatch = filter === 'all' || t.type === filter;
@@ -2219,13 +2236,20 @@ const Historico = React.memo(({ transactions, onDelete, isApiAvailable }) => {
                     alert('Conexão com servidor necessária para excluir transações.');
                     return;
                   }
-                  if (window.confirm('Deseja realmente excluir esta transação?')) {
+                  
+                  console.log('Transação a ser excluída:', {
+                    id: transaction.id,
+                    userId: transaction.userId,
+                    description: transaction.description
+                  });
+                  
+                  if (window.confirm(`Deseja realmente excluir "${transaction.description}"?`)) {
                     onDelete(transaction.id);
                   }
                 }}
                 className={`delete-btn ${!isApiAvailable ? 'disabled' : ''}`}
                 disabled={!isApiAvailable}
-                title={!isApiAvailable ? 'Servidor offline - exclusão indisponível' : 'Excluir transação'}
+                title={!isApiAvailable ? 'Servidor offline - exclusão indisponível' : `Excluir "${transaction.description}"`}
               >
                 {!isApiAvailable ? '🚫' : '🗑️'}
               </button>
