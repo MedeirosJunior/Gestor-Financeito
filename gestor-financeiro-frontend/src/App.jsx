@@ -98,7 +98,7 @@ const ErrorHandler = {
     console.error(`Erro na ${operation}:`, error);
     
     if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) {
-      toast.error('Erro de conexão. Verifique sua internet e tente novamente.');
+      toast.error('Erro de conexão com servidor. Verifique sua internet e tente novamente.');
       return;
     }
     
@@ -114,16 +114,16 @@ const ErrorHandler = {
           toast.error('Acesso negado. Você não tem permissão para esta ação.');
           break;
         case 404:
-          toast.error('Recurso não encontrado.');
+          toast.error('Servidor não encontrado. Verifique a conexão com a internet.');
           break;
         case 500:
           toast.error('Erro interno do servidor. Tente novamente mais tarde.');
           break;
         default:
-          toast.error(`Erro ${error.status}: ${operation} falhou.`);
+          toast.error(`Erro ${error.status}: ${operation} falhou. Conexão com servidor necessária.`);
       }
     } else {
-      toast.error(`Erro inesperado durante ${operation}. Tente novamente.`);
+      toast.error(`Erro inesperado durante ${operation}. Conexão com servidor necessária.`);
     }
   },
 
@@ -136,6 +136,29 @@ const ErrorHandler = {
     } else {
       toast.error(`Erro ao ${operation}. Tente recarregar a página.`);
     }
+  }
+};
+
+// Utilitários para conectividade
+const ConnectivityUtils = {
+  // Verificar se a API está disponível
+  checkApiHealth: async () => {
+    try {
+      const response = await fetch(`${config.API_URL}/api/health`, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+        signal: AbortSignal.timeout(5000) // Timeout de 5 segundos
+      });
+      return response.ok;
+    } catch (error) {
+      console.log('API não disponível:', error.message);
+      return false;
+    }
+  },
+
+  // Verificar conectividade básica
+  isOnline: () => {
+    return navigator.onLine;
   }
 };
 
@@ -261,6 +284,10 @@ function App() {
   const [recurringExpenses, setRecurringExpenses] = useState([]);
   const [dueAlerts, setDueAlerts] = useState([]);
   
+  // Estado para conectividade da API
+  const [isApiAvailable, setIsApiAvailable] = useState(false);
+  const [apiChecked, setApiChecked] = useState(false);
+  
   // Estado para categorias personalizadas
   const [categories, setCategories] = useState(CategoryManager.defaultCategories);
   const [customCategories, setCustomCategories] = useState({ entrada: [], despesa: [] });
@@ -273,6 +300,26 @@ function App() {
       setIsAuthenticated(true);
       setCurrentUser(JSON.parse(userData));
     }
+  }, []);
+
+  // Verificar disponibilidade da API na inicialização
+  useEffect(() => {
+    const checkApi = async () => {
+      console.log('Verificando disponibilidade da API...');
+      const available = await ConnectivityUtils.checkApiHealth();
+      setIsApiAvailable(available);
+      setApiChecked(true);
+      
+      if (available) {
+        console.log('API disponível - sistema operacional');
+        toast.success('Conectado ao servidor!', { autoClose: 2000 });
+      } else {
+        console.log('API indisponível - sistema bloqueado');
+        toast.error('Servidor indisponível. Operações bloqueadas até restabelecer conexão.', { autoClose: 5000 });
+      }
+    };
+    
+    checkApi();
   }, []);
 
   // Carregar categorias personalizadas na inicialização
@@ -439,9 +486,23 @@ function App() {
 
   // Otimizar fetchTransactions com useCallback
   const fetchTransactions = useCallback(async () => {
+    // Se API não está disponível, não carregar nada
+    if (!isApiAvailable || !apiChecked) {
+      console.log('API indisponível - não é possível carregar transações');
+      if (apiChecked) {
+        toast.error('Conexão com servidor necessária para carregar dados.');
+      }
+      return;
+    }
+
+    if (!currentUser?.username) {
+      console.log('Usuário não logado');
+      return;
+    }
+
     setLoading(true);
     try {
-      const response = await fetch(`${config.API_URL}/transactions`);
+      const response = await fetch(`${config.API_URL}/transactions?userId=${encodeURIComponent(currentUser.username)}`);
       
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -455,12 +516,14 @@ function App() {
       
       setTransactions(data);
     } catch (error) {
+      console.error('Erro ao buscar transações da API:', error);
+      setIsApiAvailable(false); // Marcar API como indisponível
       ErrorHandler.handleApiError(error, 'buscar transações');
-      setTransactions([]); // Fallback para array vazio
+      setTransactions([]); // Limpar transações em caso de erro
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [currentUser, isApiAvailable, apiChecked]);
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -501,12 +564,24 @@ function App() {
 
     setLoadingTransactions(true);
     try {
+      // Verificar se API está disponível - OBRIGATÓRIO para operações
+      if (!isApiAvailable) {
+        toast.error('Conexão com servidor necessária para adicionar transações. Verifique sua internet.');
+        return;
+      }
+
+      if (!currentUser?.username) {
+        toast.error('Usuário não autenticado. Faça login novamente.');
+        return;
+      }
+
       // Sanitizar dados antes de enviar
       const sanitizedTransaction = {
         ...transaction,
         description: ValidationUtils.sanitizeText(transaction.description),
         value: parseFloat(transaction.value),
-        date: transaction.date
+        date: transaction.date,
+        userId: currentUser.username
       };
 
       const response = await fetch(`${config.API_URL}/transactions`, {
@@ -522,11 +597,13 @@ function App() {
       fetchTransactions();
       toast.success(`${transaction.type === 'entrada' ? 'Receita' : 'Despesa'} adicionada com sucesso!`);
     } catch (error) {
+      console.error('Erro ao adicionar transação via API:', error);
+      setIsApiAvailable(false); // Marcar API como indisponível
       ErrorHandler.handleApiError(error, 'adicionar transação');
     } finally {
       setLoadingTransactions(false);
     }
-  }, [fetchTransactions, categories]);
+  }, [fetchTransactions, categories, isApiAvailable, currentUser, transactions]);
 
   // Otimizar deleteTransaction com useCallback
   const deleteTransaction = useCallback(async (id) => {
@@ -536,9 +613,20 @@ function App() {
       return;
     }
 
+    // Verificar se API está disponível - OBRIGATÓRIO para operações
+    if (!isApiAvailable) {
+      toast.error('Conexão com servidor necessária para excluir transações. Verifique sua internet.');
+      return;
+    }
+
+    if (!currentUser?.username) {
+      toast.error('Usuário não autenticado. Faça login novamente.');
+      return;
+    }
+
     setLoadingTransactions(true);
     try {
-      const response = await fetch(`${config.API_URL}/transactions/${id}`, {
+      const response = await fetch(`${config.API_URL}/transactions/${id}?userId=${encodeURIComponent(currentUser.username)}`, {
         method: 'DELETE',
       });
 
@@ -549,11 +637,13 @@ function App() {
       fetchTransactions();
       toast.success('Transação excluída com sucesso!');
     } catch (error) {
+      console.error('Erro ao excluir transação via API:', error);
+      setIsApiAvailable(false); // Marcar API como indisponível
       ErrorHandler.handleApiError(error, 'excluir transação');
     } finally {
       setLoadingTransactions(false);
     }
-  }, [fetchTransactions]);
+  }, [fetchTransactions, currentUser, isApiAvailable]);
 
   // Otimizar handleLogin com useCallback
   const handleLogin = useCallback((user) => {
@@ -792,24 +882,33 @@ function App() {
       <header className="header">
         <div className="header-top">
           <h1>💰 Gestor Financeiro</h1>
-          <div className="user-info">
-            <span>👤 {currentUser?.name || currentUser?.username}</span>
-            {currentUser?.isAdmin && (
+          <div className="header-controls">
+            <div className="connectivity-status">
+              {apiChecked && (
+                <span className={`status-indicator ${isApiAvailable ? 'online' : 'offline'}`}>
+                  {isApiAvailable ? '🟢 Online' : '🔴 Offline'}
+                </span>
+              )}
+            </div>
+            <div className="user-info">
+              <span>👤 {currentUser?.name || currentUser?.username}</span>
+              {currentUser?.isAdmin && (
+                <button 
+                  className={activeTab === 'usuarios' ? 'active' : ''} 
+                  onClick={() => setActiveTab('usuarios')}
+                  title="Gerenciar Usuários"
+                >
+                  👥 Usuários
+                </button>
+              )}
               <button 
-                className={activeTab === 'usuarios' ? 'active' : ''} 
-                onClick={() => setActiveTab('usuarios')}
-                title="Gerenciar Usuários"
+                className="logout-btn" 
+                onClick={handleLogout}
+                title="Sair"
               >
-                👥 Usuários
+                🚪 Sair
               </button>
-            )}
-            <button 
-              className="logout-btn" 
-              onClick={handleLogout}
-              title="Sair"
-            >
-              🚪 Sair
-            </button>
+            </div>
           </div>
         </div>
         <nav className="nav">
@@ -875,6 +974,7 @@ function App() {
               onAdd={addTransaction}
               title="💵 Lançar Entrada"
               categories={categories}
+              isApiAvailable={isApiAvailable}
             />
           )}
           
@@ -884,6 +984,7 @@ function App() {
               onAdd={addTransaction}
               title="💸 Lançar Despesa"
               categories={categories}
+              isApiAvailable={isApiAvailable}
             />
           )}
           
@@ -899,6 +1000,7 @@ function App() {
             <Historico 
               transactions={transactions} 
               onDelete={deleteTransaction}
+              isApiAvailable={isApiAvailable}
             />
           )}
           
@@ -1642,7 +1744,7 @@ function DespesasRecorrentes({ expenses, onAdd, onDelete }) {
 }
 
 // Formulário de lançamento otimizado
-const LancamentoForm = React.memo(({ type, onAdd, title, categories }) => {
+const LancamentoForm = React.memo(({ type, onAdd, title, categories, isApiAvailable }) => {
   const [form, setForm] = useState({
     description: '',
     value: '',
@@ -1658,6 +1760,12 @@ const LancamentoForm = React.memo(({ type, onAdd, title, categories }) => {
 
   const handleSubmit = useCallback((e) => {
     e.preventDefault();
+    
+    if (!isApiAvailable) {
+      toast.error('Conexão com servidor necessária para adicionar transações!');
+      return;
+    }
+    
     if (!form.description || !form.value || !form.category) {
       toast.error('Preencha todos os campos obrigatórios!');
       return;
@@ -1680,11 +1788,17 @@ const LancamentoForm = React.memo(({ type, onAdd, title, categories }) => {
       category: '',
       date: new Date().toISOString().slice(0, 10)
     });
-  }, [form, type, onAdd]);
+  }, [form, type, onAdd, isApiAvailable]);
 
   return (
-    <div className="lancamento-form">
+    <div className={`lancamento-form ${!isApiAvailable ? 'disabled' : ''}`}>
       <h2>{title}</h2>
+      
+      {!isApiAvailable && (
+        <div className="offline-warning">
+          <p>⚠️ Conexão com servidor necessária para adicionar transações</p>
+        </div>
+      )}
       
       <form onSubmit={handleSubmit}>
         <div className="form-group">
@@ -1694,6 +1808,7 @@ const LancamentoForm = React.memo(({ type, onAdd, title, categories }) => {
             value={form.description}
             onChange={e => setForm({...form, description: e.target.value})}
             placeholder="Ex: Salário, Supermercado..."
+            disabled={!isApiAvailable}
             required
           />
         </div>
@@ -1706,6 +1821,7 @@ const LancamentoForm = React.memo(({ type, onAdd, title, categories }) => {
             value={form.value}
             onChange={e => setForm({...form, value: e.target.value})}
             placeholder="0.00"
+            disabled={!isApiAvailable}
             required
           />
         </div>
@@ -1715,6 +1831,7 @@ const LancamentoForm = React.memo(({ type, onAdd, title, categories }) => {
           <select
             value={form.category}
             onChange={e => setForm({...form, category: e.target.value})}
+            disabled={!isApiAvailable}
             required
           >
             <option value="">Selecione uma categoria</option>
@@ -1732,12 +1849,20 @@ const LancamentoForm = React.memo(({ type, onAdd, title, categories }) => {
             type="date"
             value={form.date}
             onChange={e => setForm({...form, date: e.target.value})}
+            disabled={!isApiAvailable}
             required
           />
         </div>
 
-        <button type="submit" className="submit-btn">
-          Lançar {type === 'entrada' ? 'Entrada' : 'Despesa'}
+        <button 
+          type="submit" 
+          className="submit-btn"
+          disabled={!isApiAvailable}
+        >
+          {!isApiAvailable 
+            ? 'Servidor Offline' 
+            : `Lançar ${type === 'entrada' ? 'Entrada' : 'Despesa'}`
+          }
         </button>
       </form>
     </div>
@@ -1932,7 +2057,7 @@ function Relatorios({ transactions, loadingExport, setLoadingExport }) {
 }
 
 // Histórico de transações otimizado
-const Historico = React.memo(({ transactions, onDelete }) => {
+const Historico = React.memo(({ transactions, onDelete, isApiAvailable }) => {
   const [filter, setFilter] = useState('all');
   const [monthFilter, setMonthFilter] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
@@ -2029,13 +2154,19 @@ const Historico = React.memo(({ transactions, onDelete }) => {
               </span>
               <button 
                 onClick={() => {
+                  if (!isApiAvailable) {
+                    alert('Conexão com servidor necessária para excluir transações.');
+                    return;
+                  }
                   if (window.confirm('Deseja realmente excluir esta transação?')) {
                     onDelete(transaction.id);
                   }
                 }}
-                className="delete-btn"
+                className={`delete-btn ${!isApiAvailable ? 'disabled' : ''}`}
+                disabled={!isApiAvailable}
+                title={!isApiAvailable ? 'Servidor offline - exclusão indisponível' : 'Excluir transação'}
               >
-                🗑️
+                {!isApiAvailable ? '🚫' : '🗑️'}
               </button>
             </div>
           </div>
