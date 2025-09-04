@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo, Suspense, lazy } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, Suspense } from 'react';
 import './App.css';
 import config from './config';
 import * as XLSX from 'xlsx';
@@ -466,7 +466,7 @@ function App() {
     if (isAuthenticated) {
       fetchTransactions();
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, fetchTransactions]);
 
   // Otimizar addTransaction com useCallback
   const addTransaction = useCallback(async (transaction) => {
@@ -924,6 +924,7 @@ function App() {
           )}
         </Suspense>
       </main>
+      <ToastContainer />
     </div>
   );
 }
