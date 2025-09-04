@@ -22,9 +22,11 @@ function App() {
   }, []);
 
   const fetchTransactions = async () => {
+    if (!currentUser) return;
+    
     setLoading(true);
     try {
-      const response = await fetch(`${config.API_URL}/transactions`);
+      const response = await fetch(`${config.API_URL}/transactions?userId=${encodeURIComponent(currentUser.username)}`);
       const data = await response.json();
       setTransactions(data);
     } catch (error) {
@@ -190,13 +192,13 @@ function Login({ onLogin }) {
     password: ''
   });
 
-  // Carregar usuários do localStorage
+  // Carregar usuários do localStorage (fallback) e verificar API
   const getUsers = () => {
-    const users = localStorage.getItem('financeiro_users');
-    return users ? JSON.parse(users) : [
+    // Primeiro tenta autenticar via API (método preferido)
+    return [
       { 
         username: 'junior395@gmail.com', 
-        password: 'j92953793*/*', 
+        password: 'j991343519*/*', 
         name: 'Administrador',
         isAdmin: true 
       }

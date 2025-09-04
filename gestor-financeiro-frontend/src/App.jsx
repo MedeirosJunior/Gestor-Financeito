@@ -1344,7 +1344,7 @@ function GerenciarUsuarios() {
 
   // Remover usuário via API
   const handleRemoveUser = async (userId, userEmail) => {
-    if (userEmail === 'admin@gestor.com') {
+    if (userEmail === 'junior395@gmail.com') {
       toast.error('Não é possível remover o administrador principal!');
       return;
     }
@@ -1443,7 +1443,7 @@ function GerenciarUsuarios() {
                 <small>Cadastrado: {new Date(user.created_at).toLocaleDateString()}</small>
               </div>
               <div className="user-actions">
-                {user.email !== 'admin@gestor.com' && (
+                {user.email !== 'junior395@gmail.com' && (
                   <ButtonSpinner 
                     onClick={() => handleRemoveUser(user.id, user.email)}
                     className="remove-btn"
