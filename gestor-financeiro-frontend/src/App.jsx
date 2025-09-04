@@ -1159,55 +1159,55 @@ function LoadingOverlay({ show, message = 'Carregando...' }) {
 // Componente de Login otimizado com React.memo
 const Login = React.memo(({ onLogin, loadingAuth, setLoadingAuth }) => {
   const [credentials, setCredentials] = useState({
-    username: '',
+    email: '',
     password: ''
   });
 
-  // Memoizar a função getUsers para evitar recriação
-  const getUsers = useCallback(() => {
-    const users = localStorage.getItem('financeiro_users');
-    return users ? JSON.parse(users) : [
-      { 
-        username: 'junior395@gmail.com', 
-        password: 'j92953793*/*', 
-        name: 'Administrador',
-        isAdmin: true 
-      }
-    ];
-  }, []);
-
-  // Otimizar handleSubmit com useCallback
-  const handleSubmit = useCallback((e) => {
+  // Otimizar handleSubmit com useCallback para API
+  const handleSubmit = useCallback(async (e) => {
     e.preventDefault();
     setLoadingAuth(true);
     
     try {
-      const users = getUsers();
+      // Fazer login via API
+      const response = await fetch(`${config.API_URL}/auth/login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          email: credentials.email,
+          password: credentials.password
+        })
+      });
 
-      // Verificar login
-      const user = users.find(user => 
-        user.username === credentials.username && user.password === credentials.password
-      );
+      const data = await response.json();
 
-      if (user) {
+      if (response.ok) {
+        // Login bem-sucedido
+        const user = {
+          name: data.user.name,
+          email: data.user.email,
+          id: data.user.id
+        };
+        
         onLogin(user);
-        localStorage.setItem('isAuthenticated', 'true');
-        localStorage.setItem('currentUser', JSON.stringify(user));
-        localStorage.setItem('authTimestamp', new Date().getTime().toString());
+        toast.success('Login realizado com sucesso!');
       } else {
-        toast.error('Usuário ou senha incorretos!');
+        // Login falhou
+        toast.error(data.error || 'Email ou senha incorretos!');
       }
     } catch (error) {
       console.error('Erro no login:', error);
-      toast.error('Erro no login. Tente novamente.');
+      toast.error('Erro de conexão. Verifique sua internet e tente novamente.');
     } finally {
       setLoadingAuth(false);
     }
-  }, [credentials, onLogin, setLoadingAuth, getUsers]);
+  }, [credentials, onLogin, setLoadingAuth]);
 
   // Otimizar handlers de input com useCallback
-  const handleUsernameChange = useCallback((e) => {
-    setCredentials(prev => ({...prev, username: e.target.value}));
+  const handleEmailChange = useCallback((e) => {
+    setCredentials(prev => ({...prev, email: e.target.value}));
   }, []);
 
   const handlePasswordChange = useCallback((e) => {
@@ -1224,8 +1224,8 @@ const Login = React.memo(({ onLogin, loadingAuth, setLoadingAuth }) => {
             <label>👤 Email:</label>
             <input
               type="email"
-              value={credentials.username}
-              onChange={handleUsernameChange}
+              value={credentials.email}
+              onChange={handleEmailChange}
               placeholder="Digite seu email"
               required
             />
@@ -1250,8 +1250,8 @@ const Login = React.memo(({ onLogin, loadingAuth, setLoadingAuth }) => {
         </form>
         
         <div className="login-info">
-          <p><strong>Acesso restrito ao administrador</strong></p>
-          <p>Entre em contato para obter credenciais</p>
+          <p><strong>Admin:</strong> admin@gestor.com</p>
+          <p><strong>Senha:</strong> j92953793*/*</p>
         </div>
       </div>
     </div>
@@ -1262,64 +1262,100 @@ const Login = React.memo(({ onLogin, loadingAuth, setLoadingAuth }) => {
 function GerenciarUsuarios() {
   const [users, setUsers] = useState([]);
   const [isAddingUser, setIsAddingUser] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [newUser, setNewUser] = useState({
-    username: '',
+    email: '',
     password: '',
-    name: '',
-    isAdmin: false
+    name: ''
   });
 
-  // Carregar usuários
-  const loadUsers = () => {
-    const savedUsers = localStorage.getItem('financeiro_users');
-    if (savedUsers) {
-      setUsers(JSON.parse(savedUsers));
+  // Carregar usuários da API
+  const loadUsers = async () => {
+    try {
+      setLoading(true);
+      const response = await fetch(`${config.API_URL}/admin/users`);
+      if (response.ok) {
+        const data = await response.json();
+        setUsers(data);
+      } else {
+        toast.error('Erro ao carregar usuários');
+      }
+    } catch (error) {
+      console.error('Erro ao carregar usuários:', error);
+      toast.error('Erro de conexão ao carregar usuários');
+    } finally {
+      setLoading(false);
     }
-  };
-
-  // Salvar usuários
-  const saveUsers = (updatedUsers) => {
-    localStorage.setItem('financeiro_users', JSON.stringify(updatedUsers));
-    setUsers(updatedUsers);
   };
 
   useEffect(() => {
     loadUsers();
   }, []);
 
-  // Adicionar novo usuário
-  const handleAddUser = (e) => {
+  // Adicionar novo usuário via API
+  const handleAddUser = async (e) => {
     e.preventDefault();
     
-    if (newUser.password.length < 4) {
-      alert('A senha deve ter pelo menos 4 caracteres!');
+    if (newUser.password.length < 6) {
+      toast.error('A senha deve ter pelo menos 6 caracteres!');
       return;
     }
 
-    // Verificar se usuário já existe
-    const userExists = users.find(user => user.username === newUser.username);
-    if (userExists) {
-      alert('Usuário já existe!');
-      return;
-    }
+    try {
+      setLoading(true);
+      const response = await fetch(`${config.API_URL}/admin/register-user`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(newUser)
+      });
 
-    const updatedUsers = [...users, { ...newUser }];
-    saveUsers(updatedUsers);
-    setNewUser({ username: '', password: '', name: '', isAdmin: false });
-    setIsAddingUser(false);
-    alert('Usuário cadastrado com sucesso!');
+      const data = await response.json();
+
+      if (response.ok) {
+        toast.success('Usuário cadastrado com sucesso!');
+        setNewUser({ email: '', password: '', name: '' });
+        setIsAddingUser(false);
+        loadUsers(); // Recarregar lista
+      } else {
+        toast.error(data.error || 'Erro ao cadastrar usuário');
+      }
+    } catch (error) {
+      console.error('Erro ao cadastrar usuário:', error);
+      toast.error('Erro de conexão ao cadastrar usuário');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  // Remover usuário
-  const handleRemoveUser = (username) => {
-    if (username === 'junior395@gmail.com') {
-      alert('Não é possível remover o administrador principal!');
+  // Remover usuário via API
+  const handleRemoveUser = async (userId, userEmail) => {
+    if (userEmail === 'admin@gestor.com') {
+      toast.error('Não é possível remover o administrador principal!');
       return;
     }
 
-    if (window.confirm(`Deseja realmente remover o usuário ${username}?`)) {
-      const updatedUsers = users.filter(user => user.username !== username);
-      saveUsers(updatedUsers);
+    if (window.confirm(`Deseja realmente remover o usuário ${userEmail}?`)) {
+      try {
+        setLoading(true);
+        const response = await fetch(`${config.API_URL}/admin/users/${userId}`, {
+          method: 'DELETE'
+        });
+
+        if (response.ok) {
+          toast.success('Usuário removido com sucesso!');
+          loadUsers(); // Recarregar lista
+        } else {
+          const data = await response.json();
+          toast.error(data.error || 'Erro ao remover usuário');
+        }
+      } catch (error) {
+        console.error('Erro ao remover usuário:', error);
+        toast.error('Erro de conexão ao remover usuário');
+      } finally {
+        setLoading(false);
+      }
     }
   };
 
@@ -1344,8 +1380,8 @@ function GerenciarUsuarios() {
               <label>👤 Email:</label>
               <input
                 type="email"
-                value={newUser.username}
-                onChange={(e) => setNewUser({...newUser, username: e.target.value})}
+                value={newUser.email}
+                onChange={(e) => setNewUser({...newUser, email: e.target.value})}
                 required
               />
             </div>
@@ -1365,45 +1401,48 @@ function GerenciarUsuarios() {
                 value={newUser.password}
                 onChange={(e) => setNewUser({...newUser, password: e.target.value})}
                 required
-                minLength="4"
+                minLength="6"
               />
             </div>
-            <div className="form-group">
-              <label>
-                <input
-                  type="checkbox"
-                  checked={newUser.isAdmin}
-                  onChange={(e) => setNewUser({...newUser, isAdmin: e.target.checked})}
-                />
-                👑 Administrador
-              </label>
-            </div>
-            <button type="submit" className="submit-btn">Cadastrar</button>
+            <ButtonSpinner 
+              type="submit" 
+              className="submit-btn" 
+              loading={loading}
+            >
+              Cadastrar
+            </ButtonSpinner>
           </form>
         </div>
       )}
 
       <div className="users-list">
         <h3>Usuários Cadastrados</h3>
-        {users.map(user => (
-          <div key={user.username} className="user-card">
-            <div className="user-info">
-              <h4>{user.name}</h4>
-              <p>{user.username}</p>
-              {user.isAdmin && <span className="admin-badge">👑 Admin</span>}
+        {loading ? (
+          <p>Carregando usuários...</p>
+        ) : users.length === 0 ? (
+          <p>Nenhum usuário cadastrado</p>
+        ) : (
+          users.map(user => (
+            <div key={user.id} className="user-card">
+              <div className="user-info">
+                <h4>{user.name}</h4>
+                <p>{user.email}</p>
+                <small>Cadastrado: {new Date(user.created_at).toLocaleDateString()}</small>
+              </div>
+              <div className="user-actions">
+                {user.email !== 'admin@gestor.com' && (
+                  <ButtonSpinner 
+                    onClick={() => handleRemoveUser(user.id, user.email)}
+                    className="remove-btn"
+                    loading={loading}
+                  >
+                    🗑️ Remover
+                  </ButtonSpinner>
+                )}
+              </div>
             </div>
-            <div className="user-actions">
-              {user.username !== 'junior395@gmail.com' && (
-                <button 
-                  onClick={() => handleRemoveUser(user.username)}
-                  className="remove-btn"
-                >
-                  🗑️ Remover
-                </button>
-              )}
-            </div>
-          </div>
-        ))}
+          ))
+        )}
       </div>
     </div>
   );
