@@ -788,9 +788,9 @@ function App() {
       return;
     }
 
-    const validRecurrences = ['mensal', 'semanal', 'anual'];
+    const validRecurrences = ['monthly', 'bimonthly', 'quarterly', 'semiannual', 'annual', 'fifth-business-day'];
     if (!expense.recurrence || !validRecurrences.includes(expense.recurrence)) {
-      toast.error('Recorrência inválida! Use: mensal, semanal ou anual.');
+      toast.error('Recorrência inválida! Selecione uma opção válida.');
       return;
     }
 
@@ -851,22 +851,22 @@ function App() {
 
     while (nextDue <= today) {
       switch (recurrence) {
-        case 'mensal':
+        case 'monthly':
           nextDue.setMonth(nextDue.getMonth() + 1);
           break;
-        case 'bimestral':
+        case 'bimonthly':
           nextDue.setMonth(nextDue.getMonth() + 2);
           break;
-        case 'trimestral':
+        case 'quarterly':
           nextDue.setMonth(nextDue.getMonth() + 3);
           break;
-        case 'semestral':
+        case 'semiannual':
           nextDue.setMonth(nextDue.getMonth() + 6);
           break;
-        case 'anual':
+        case 'annual':
           nextDue.setFullYear(nextDue.getFullYear() + 1);
           break;
-        case 'quinto-dia-util':
+        case 'fifth-business-day':
           nextDue = calculateFifthBusinessDay(nextDue);
           break;
         default:
