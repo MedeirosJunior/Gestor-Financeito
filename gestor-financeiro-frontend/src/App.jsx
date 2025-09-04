@@ -556,9 +556,9 @@ function App() {
 
     setLoading(true);
     try {
-      console.log('📡 Fazendo requisição para:', `${config.API_URL}/transactions?userId=${encodeURIComponent(currentUser.username)}`);
+      console.log('📡 Fazendo requisição para:', `${config.API_URL}/transactions?userId=${encodeURIComponent(currentUser.email)}`);
       
-      const response = await fetch(`${config.API_URL}/transactions?userId=${encodeURIComponent(currentUser.username)}`);
+      const response = await fetch(`${config.API_URL}/transactions?userId=${encodeURIComponent(currentUser.email)}`);
       
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -639,7 +639,7 @@ function App() {
         description: ValidationUtils.sanitizeText(transaction.description),
         value: parseFloat(transaction.value),
         date: transaction.date,
-        userId: currentUser.username
+        userId: currentUser.email
       };
 
       const response = await fetch(`${config.API_URL}/transactions`, {
@@ -686,7 +686,7 @@ function App() {
     try {
       console.log('🗑️ Tentando excluir transação:', id, 'para usuário:', currentUser.username);
       
-      const response = await fetch(`${config.API_URL}/transactions/${id}?userId=${encodeURIComponent(currentUser.username)}`, {
+      const response = await fetch(`${config.API_URL}/transactions/${id}?userId=${encodeURIComponent(currentUser.email)}`, {
         method: 'DELETE',
       });
 
@@ -1248,8 +1248,8 @@ const Login = React.memo(({ onLogin, loadingAuth, setLoadingAuth }) => {
         </form>
         
         <div className="login-info">
-          <p><strong>Admin:</strong> admin@gestor.com</p>
-          <p><strong>Senha:</strong> j92953793*/*</p>
+          <p><strong>Sistema:</strong> Gestor Financeiro</p>
+          <p><strong>Status:</strong> Conectado à API</p>
         </div>
         
         <div className="login-actions">
@@ -1257,11 +1257,13 @@ const Login = React.memo(({ onLogin, loadingAuth, setLoadingAuth }) => {
             type="button" 
             className="clear-data-btn"
             onClick={() => {
-              localStorage.clear();
-              window.location.reload();
+              if (window.confirm('⚠️ ATENÇÃO: Isso vai limpar apenas os dados do navegador (não os dados do servidor). Deseja continuar?')) {
+                localStorage.clear();
+                window.location.reload();
+              }
             }}
           >
-            🧹 Limpar Dados do Navegador
+            🧹 Limpar Cache do Navegador
           </button>
         </div>
       </div>

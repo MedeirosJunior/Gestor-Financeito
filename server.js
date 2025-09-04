@@ -106,16 +106,14 @@ initializeDatabase().catch(error => {
 // Função para criar usuário admin
 async function createAdminUser() {
   try {
-    const result = await pool.query('SELECT id FROM users WHERE email = $1', ['admin@gestor.com']);
+    const result = await pool.query('SELECT id FROM users WHERE email = $1', ['junior395@gmail.com']);
     
     if (result.rows.length === 0) {
       await pool.query(
         'INSERT INTO users (name, email, password) VALUES ($1, $2, $3)',
-        ['Administrador', 'admin@gestor.com', 'j92953793*/*']
+        ['Administrador', 'junior395@gmail.com', 'j991343519*/*']
       );
       console.log('👑 Usuário admin criado com sucesso!');
-      console.log('📧 Email: admin@gestor.com');
-      console.log('🔑 Senha: j92953793*/*');
     } else {
       console.log('👑 Usuário admin já existe');
     }

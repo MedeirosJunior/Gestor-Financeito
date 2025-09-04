@@ -2,23 +2,23 @@
 node_modules/
 gestor-financeiro-frontend/node_modules/
 
-# Banco de dados
+# Banco de dados SQLite (não usado mais, mas manter ignorado)
 *.db
 *.sqlite
 *.sqlite3
-
-# Banco de dados de desenvolvimento (manter em produção)
-# *.db
 
 # Logs
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+lerna-debug.log*
+.pnpm-debug.log*
 
 # Arquivos de build
 gestor-financeiro-frontend/build/
 public/
 dist/
+.parcel-cache/
 
 # Arquivos de ambiente
 .env
@@ -31,18 +31,31 @@ dist/
 
 # Cache
 .cache/
-.parcel-cache/
+.npm/
+.yarn/cache/
 
 # Arquivos temporários
 *.tmp
 *.temp
+*.log
 
 # Sistema operacional
 .DS_Store
 Thumbs.db
+*.swp
+*.swo
 
 # Editores
 .vscode/
 .idea/
-*.swp
-*.swo
+*.sublime-project
+*.sublime-workspace
+
+# Arquivos de deploy temporários
+deploy/
+backup/
+
+# Certificados SSL
+*.pem
+*.key
+*.crt
