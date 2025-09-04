@@ -1,25 +1,8 @@
 const express = require('express');
 const cors = require('cors');
 const { Pool } = require('pg');
-const path = require('path');// Rotas para transações
-app.get('/transactions', async (req, res) => {
-  const { userId } = req.query;
-  
-  if (!userId || userId === 'undefined') {
-    return res.status(400).json({ error: 'userId é obrigatório' });
-  }
-  
-  try {
-    const result = await pool.query(
-      'SELECT * FROM transactions WHERE "userId" = $1 ORDER BY date DESC, created_at DESC', 
-      [userId]
-    );
-    res.json(result.rows);
-  } catch (error) {
-    console.error('Erro ao buscar transações:', error);
-    res.status(500).json({ error: error.message });
-  }
-});();
+const path = require('path');
+const app = express();
 const port = process.env.PORT || 3001;
 
 // Configurar CORS para permitir frontend separado
@@ -120,8 +103,6 @@ initializeDatabase().catch(error => {
   process.exit(1);
 });
 
-
-
 // Função para criar usuário admin
 async function createAdminUser() {
   try {
@@ -147,24 +128,23 @@ async function createAdminUser() {
 setTimeout(() => createAdminUser(), 2000);
 
 // Rotas para transações
-app.get('/transactions', (req, res) => {
+app.get('/transactions', async (req, res) => {
   const { userId } = req.query;
   
   if (!userId || userId === 'undefined') {
-    return res.status(400).json({ error: 'ID do usuário é obrigatório' });
+    return res.status(400).json({ error: 'userId é obrigatório' });
   }
   
-  db.all(
-    'SELECT * FROM transactions WHERE userId = ? ORDER BY date DESC, created_at DESC', 
-    [userId], 
-    (err, rows) => {
-      if (err) {
-        console.error(err);
-        return res.status(500).json({ error: err.message });
-      }
-      res.json(rows);
-    }
-  );
+  try {
+    const result = await pool.query(
+      'SELECT * FROM transactions WHERE "userId" = $1 ORDER BY date DESC, created_at DESC', 
+      [userId]
+    );
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Erro ao buscar transações:', error);
+    res.status(500).json({ error: error.message });
+  }
 });
 
 app.post('/transactions', async (req, res) => {
@@ -398,11 +378,4 @@ app.get('/debug/users', async (req, res) => {
 app.listen(port, () => {
   console.log(`🚀 API do Gestor Financeiro rodando em http://localhost:${port}`);
   console.log(`📊 Backend iniciado com sucesso!`);
-  console.log(`🌐 CORS configurado para: ${corsOptions.origin.join(', ')}`);
-  
-  if (process.env.NODE_ENV !== 'production') {
-    console.log(`🎯 Frontend deve rodar em: http://localhost:3000`);
-  } else {
-    console.log(`🌍 Frontend em produção: ${process.env.FRONTEND_URL || 'https://gestor-financeito.netlify.app'}`);
-  }
 });
