@@ -197,12 +197,16 @@ function App() {
   };
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (isAuthenticated) {
-      fetchRecurringExpenses();
+      const saved = localStorage.getItem('recurringExpenses');
+      if (saved) {
+        const expenses = JSON.parse(saved);
+        setRecurringExpenses(expenses);
+        checkDueExpenses(expenses);
+      }
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Se não estiver autenticado, mostrar tela de login
   if (!isAuthenticated) {
