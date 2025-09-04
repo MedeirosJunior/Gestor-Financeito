@@ -196,6 +196,7 @@ function App() {
     setDueAlerts(alerts);
   };
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (isAuthenticated) {
       fetchRecurringExpenses();
