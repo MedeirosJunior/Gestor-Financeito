@@ -1,10 +1,252 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, Suspense, lazy } from 'react';
 import './App.css';
 import config from './config';
 import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
 import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
+
+// Componente de Loading para Suspense
+const SuspenseLoader = ({ message = "Carregando..." }) => (
+  <div className="suspense-loader">
+    <div className="loading-spinner large"></div>
+    <p>{message}</p>
+  </div>
+);
+
+// Hook personalizado para debounce
+const useDebounce = (value, delay) => {
+  const [debouncedValue, setDebouncedValue] = useState(value);
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedValue(value);
+    }, delay);
+
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [value, delay]);
+
+  return debouncedValue;
+};
+
+// Funções de Validação
+const ValidationUtils = {
+  // Validar se é um número válido e positivo
+  isValidPositiveNumber: (value) => {
+    const num = parseFloat(value);
+    return !isNaN(num) && num > 0 && isFinite(num);
+  },
+
+  // Validar se string não está vazia
+  isNotEmpty: (value) => {
+    return typeof value === 'string' && value.trim().length > 0;
+  },
+
+  // Validar formato de data
+  isValidDate: (dateString) => {
+    if (!dateString) return false;
+    const date = new Date(dateString);
+    return date instanceof Date && !isNaN(date) && dateString.length === 10;
+  },
+
+  // Validar se data não é futura demais (máximo 1 ano no futuro)
+  isReasonableDate: (dateString) => {
+    if (!ValidationUtils.isValidDate(dateString)) return false;
+    const date = new Date(dateString);
+    const now = new Date();
+    const oneYearFromNow = new Date(now.getFullYear() + 1, now.getMonth(), now.getDate());
+    return date <= oneYearFromNow;
+  },
+
+  // Validar valor monetário (máximo 1 milhão)
+  isReasonableAmount: (value) => {
+    const num = parseFloat(value);
+    return ValidationUtils.isValidPositiveNumber(value) && num <= 1000000;
+  },
+
+  // Validar descrição (máximo 100 caracteres)
+  isValidDescription: (description) => {
+    return ValidationUtils.isNotEmpty(description) && description.trim().length <= 100;
+  },
+
+  // Validar categoria
+  isValidCategory: (category, validCategories) => {
+    return ValidationUtils.isNotEmpty(category) && validCategories.includes(category);
+  },
+
+  // Sanitizar entrada de texto
+  sanitizeText: (text) => {
+    if (typeof text !== 'string') return '';
+    return text.trim().slice(0, 100);
+  },
+
+  // Validar credenciais de login
+  isValidCredentials: (username, password) => {
+    return ValidationUtils.isNotEmpty(username) && 
+           ValidationUtils.isNotEmpty(password) && 
+           username.length >= 3 && 
+           password.length >= 3;
+  }
+};
+
+// Função para tratamento de erros
+const ErrorHandler = {
+  // Tratar erros de API
+  handleApiError: (error, operation = 'operação') => {
+    console.error(`Erro na ${operation}:`, error);
+    
+    if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) {
+      toast.error('Erro de conexão. Verifique sua internet e tente novamente.');
+      return;
+    }
+    
+    if (error.status) {
+      switch (error.status) {
+        case 400:
+          toast.error('Dados inválidos. Verifique as informações e tente novamente.');
+          break;
+        case 401:
+          toast.error('Não autorizado. Faça login novamente.');
+          break;
+        case 403:
+          toast.error('Acesso negado. Você não tem permissão para esta ação.');
+          break;
+        case 404:
+          toast.error('Recurso não encontrado.');
+          break;
+        case 500:
+          toast.error('Erro interno do servidor. Tente novamente mais tarde.');
+          break;
+        default:
+          toast.error(`Erro ${error.status}: ${operation} falhou.`);
+      }
+    } else {
+      toast.error(`Erro inesperado durante ${operation}. Tente novamente.`);
+    }
+  },
+
+  // Tratar erros de localStorage
+  handleStorageError: (error, operation = 'salvar dados') => {
+    console.error(`Erro de armazenamento ao ${operation}:`, error);
+    
+    if (error.name === 'QuotaExceededError') {
+      toast.error('Espaço de armazenamento esgotado. Limpe alguns dados antigos.');
+    } else {
+      toast.error(`Erro ao ${operation}. Tente recarregar a página.`);
+    }
+  }
+};
+
+// Sistema de Categorias Personalizadas
+const CategoryManager = {
+  // Categorias padrão do sistema
+  defaultCategories: {
+    entrada: [
+      { id: 'sal', name: 'Salário', icon: '💼', color: '#10b981' },
+      { id: 'free', name: 'Freelance', icon: '💻', color: '#3b82f6' },
+      { id: 'inv', name: 'Investimentos', icon: '📈', color: '#8b5cf6' },
+      { id: 'out-ent', name: 'Outros', icon: '💰', color: '#6b7280' }
+    ],
+    despesa: [
+      { id: 'alim', name: 'Alimentação', icon: '🍽️', color: '#ef4444' },
+      { id: 'trans', name: 'Transporte', icon: '🚗', color: '#f59e0b' },
+      { id: 'mor', name: 'Moradia', icon: '🏠', color: '#06b6d4' },
+      { id: 'sau', name: 'Saúde', icon: '⚕️', color: '#84cc16' },
+      { id: 'laz', name: 'Lazer', icon: '🎮', color: '#ec4899' },
+      { id: 'out-desp', name: 'Outros', icon: '💸', color: '#6b7280' }
+    ]
+  },
+
+  // Ícones disponíveis para seleção
+  availableIcons: [
+    '💼', '💻', '📈', '💰', '🏆', '🎯', '💎', '🔥',
+    '🍽️', '🚗', '🏠', '⚕️', '🎮', '💸', '📚', '👕',
+    '🎬', '✈️', '🏋️', '🎨', '🔧', '📱', '💊', '🎪',
+    '🛒', '⛽', '💡', '🧾', '🎵', '📺', '🎈', '🌟'
+  ],
+
+  // Cores disponíveis para seleção
+  availableColors: [
+    '#ef4444', '#f59e0b', '#84cc16', '#10b981', '#06b6d4',
+    '#3b82f6', '#8b5cf6', '#ec4899', '#f43f5e', '#6b7280'
+  ],
+
+  // Carregar categorias do localStorage
+  loadCategories: () => {
+    try {
+      const saved = localStorage.getItem('customCategories');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return {
+          entrada: [...CategoryManager.defaultCategories.entrada, ...(parsed.entrada || [])],
+          despesa: [...CategoryManager.defaultCategories.despesa, ...(parsed.despesa || [])]
+        };
+      }
+      return CategoryManager.defaultCategories;
+    } catch (error) {
+      console.error('Erro ao carregar categorias:', error);
+      return CategoryManager.defaultCategories;
+    }
+  },
+
+  // Salvar categorias customizadas (apenas as personalizadas)
+  saveCustomCategories: (customCategories) => {
+    try {
+      localStorage.setItem('customCategories', JSON.stringify(customCategories));
+      return true;
+    } catch (error) {
+      ErrorHandler.handleStorageError(error, 'salvar categorias');
+      return false;
+    }
+  },
+
+  // Obter apenas categorias customizadas
+  getCustomCategories: () => {
+    try {
+      const saved = localStorage.getItem('customCategories');
+      return saved ? JSON.parse(saved) : { entrada: [], despesa: [] };
+    } catch (error) {
+      console.error('Erro ao obter categorias customizadas:', error);
+      return { entrada: [], despesa: [] };
+    }
+  },
+
+  // Validar dados da categoria
+  validateCategory: (category) => {
+    if (!ValidationUtils.isNotEmpty(category.name)) {
+      return { valid: false, error: 'Nome da categoria é obrigatório' };
+    }
+    
+    if (category.name.length > 30) {
+      return { valid: false, error: 'Nome deve ter no máximo 30 caracteres' };
+    }
+
+    if (!category.icon || !CategoryManager.availableIcons.includes(category.icon)) {
+      return { valid: false, error: 'Ícone inválido selecionado' };
+    }
+
+    if (!category.color || !CategoryManager.availableColors.includes(category.color)) {
+      return { valid: false, error: 'Cor inválida selecionada' };
+    }
+
+    return { valid: true };
+  },
+
+  // Verificar se categoria já existe
+  categoryExists: (name, type, excludeId = null) => {
+    const categories = CategoryManager.loadCategories();
+    return categories[type].some(cat => 
+      cat.name.toLowerCase() === name.toLowerCase() && cat.id !== excludeId
+    );
+  },
+
+  // Gerar ID único para nova categoria
+  generateId: () => {
+    return 'custom_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+  }
+};
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -18,6 +260,10 @@ function App() {
   const [loadingAuth, setLoadingAuth] = useState(false);
   const [recurringExpenses, setRecurringExpenses] = useState([]);
   const [dueAlerts, setDueAlerts] = useState([]);
+  
+  // Estado para categorias personalizadas
+  const [categories, setCategories] = useState(CategoryManager.defaultCategories);
+  const [customCategories, setCustomCategories] = useState({ entrada: [], despesa: [] });
 
   // Verificar autenticação no localStorage
   useEffect(() => {
@@ -29,18 +275,192 @@ function App() {
     }
   }, []);
 
-  const fetchTransactions = async () => {
+  // Carregar categorias personalizadas na inicialização
+  useEffect(() => {
+    if (isAuthenticated) {
+      const loadedCategories = CategoryManager.loadCategories();
+      const customCats = CategoryManager.getCustomCategories();
+      setCategories(loadedCategories);
+      setCustomCategories(customCats);
+    }
+  }, [isAuthenticated]);
+
+  // Funções CRUD para categorias personalizadas
+  const addCustomCategory = useCallback((type, categoryData) => {
+    // Validar dados da categoria
+    const validation = CategoryManager.validateCategory(categoryData);
+    if (!validation.valid) {
+      toast.error(validation.error);
+      return false;
+    }
+
+    // Verificar se já existe
+    if (CategoryManager.categoryExists(categoryData.name, type)) {
+      toast.error('Já existe uma categoria com esse nome!');
+      return false;
+    }
+
+    try {
+      // Criar nova categoria
+      const newCategory = {
+        id: CategoryManager.generateId(),
+        name: ValidationUtils.sanitizeText(categoryData.name),
+        icon: categoryData.icon,
+        color: categoryData.color,
+        custom: true,
+        createdAt: new Date().toISOString()
+      };
+
+      // Atualizar estado local
+      const updatedCustomCategories = {
+        ...customCategories,
+        [type]: [...customCategories[type], newCategory]
+      };
+
+      const updatedAllCategories = {
+        ...categories,
+        [type]: [...categories[type], newCategory]
+      };
+
+      // Salvar no localStorage
+      if (CategoryManager.saveCustomCategories(updatedCustomCategories)) {
+        setCustomCategories(updatedCustomCategories);
+        setCategories(updatedAllCategories);
+        toast.success(`Categoria "${newCategory.name}" criada com sucesso!`);
+        return true;
+      }
+      return false;
+    } catch (error) {
+      ErrorHandler.handleStorageError(error, 'adicionar categoria');
+      return false;
+    }
+  }, [customCategories, categories]);
+
+  const updateCustomCategory = useCallback((type, categoryId, updatedData) => {
+    // Validar dados da categoria
+    const validation = CategoryManager.validateCategory(updatedData);
+    if (!validation.valid) {
+      toast.error(validation.error);
+      return false;
+    }
+
+    // Verificar se nome já existe (excluindo a categoria atual)
+    if (CategoryManager.categoryExists(updatedData.name, type, categoryId)) {
+      toast.error('Já existe uma categoria com esse nome!');
+      return false;
+    }
+
+    try {
+      // Atualizar categoria personalizada
+      const updatedCustomCategories = {
+        ...customCategories,
+        [type]: customCategories[type].map(cat => 
+          cat.id === categoryId 
+            ? {
+                ...cat,
+                name: ValidationUtils.sanitizeText(updatedData.name),
+                icon: updatedData.icon,
+                color: updatedData.color,
+                updatedAt: new Date().toISOString()
+              }
+            : cat
+        )
+      };
+
+      const updatedAllCategories = {
+        ...categories,
+        [type]: categories[type].map(cat => 
+          cat.id === categoryId 
+            ? {
+                ...cat,
+                name: ValidationUtils.sanitizeText(updatedData.name),
+                icon: updatedData.icon,
+                color: updatedData.color,
+                updatedAt: new Date().toISOString()
+              }
+            : cat
+        )
+      };
+
+      // Salvar no localStorage
+      if (CategoryManager.saveCustomCategories(updatedCustomCategories)) {
+        setCustomCategories(updatedCustomCategories);
+        setCategories(updatedAllCategories);
+        toast.success('Categoria atualizada com sucesso!');
+        return true;
+      }
+      return false;
+    } catch (error) {
+      ErrorHandler.handleStorageError(error, 'atualizar categoria');
+      return false;
+    }
+  }, [customCategories, categories]);
+
+  const deleteCustomCategory = useCallback((type, categoryId) => {
+    try {
+      // Verificar se categoria é padrão (não pode ser deletada)
+      const isDefault = CategoryManager.defaultCategories[type].some(cat => cat.id === categoryId);
+      if (isDefault) {
+        toast.error('Não é possível excluir categorias padrão do sistema!');
+        return false;
+      }
+
+      // Verificar se categoria está em uso
+      const categoryInUse = transactions.some(t => t.category === categoryId);
+      if (categoryInUse) {
+        toast.error('Não é possível excluir categoria que está sendo usada em transações!');
+        return false;
+      }
+
+      // Remover categoria
+      const updatedCustomCategories = {
+        ...customCategories,
+        [type]: customCategories[type].filter(cat => cat.id !== categoryId)
+      };
+
+      const updatedAllCategories = {
+        ...categories,
+        [type]: categories[type].filter(cat => cat.id !== categoryId)
+      };
+
+      // Salvar no localStorage
+      if (CategoryManager.saveCustomCategories(updatedCustomCategories)) {
+        setCustomCategories(updatedCustomCategories);
+        setCategories(updatedAllCategories);
+        toast.success('Categoria excluída com sucesso!');
+        return true;
+      }
+      return false;
+    } catch (error) {
+      ErrorHandler.handleStorageError(error, 'excluir categoria');
+      return false;
+    }
+  }, [customCategories, categories, transactions]);
+
+  // Otimizar fetchTransactions com useCallback
+  const fetchTransactions = useCallback(async () => {
     setLoading(true);
     try {
       const response = await fetch(`${config.API_URL}/transactions`);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      
       const data = await response.json();
+      
+      if (!Array.isArray(data)) {
+        throw new Error('Formato de dados inválido recebido do servidor');
+      }
+      
       setTransactions(data);
     } catch (error) {
-      console.error('Erro ao buscar transações:', error);
+      ErrorHandler.handleApiError(error, 'buscar transações');
+      setTransactions([]); // Fallback para array vazio
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -48,54 +468,134 @@ function App() {
     }
   }, [isAuthenticated]);
 
-  const addTransaction = async (transaction) => {
+  // Otimizar addTransaction com useCallback
+  const addTransaction = useCallback(async (transaction) => {
+    // Validação antes de enviar
+    if (!ValidationUtils.isValidDescription(transaction.description)) {
+      toast.error('Descrição deve ter entre 1 e 100 caracteres!');
+      return;
+    }
+
+    if (!ValidationUtils.isReasonableAmount(transaction.value)) {
+      toast.error('Valor deve ser um número positivo até R$ 1.000.000!');
+      return;
+    }
+
+    if (!ValidationUtils.isValidDate(transaction.date)) {
+      toast.error('Data inválida!');
+      return;
+    }
+
+    if (!ValidationUtils.isReasonableDate(transaction.date)) {
+      toast.error('Data não pode ser mais de 1 ano no futuro!');
+      return;
+    }
+
+    // Usar categorias dinâmicas para validação
+    const validCategoryIds = categories[transaction.type]?.map(cat => cat.id) || [];
+    
+    if (!validCategoryIds.includes(transaction.category)) {
+      toast.error('Categoria inválida!');
+      return;
+    }
+
     setLoadingTransactions(true);
     try {
-      await fetch(`${config.API_URL}/transactions`, {
+      // Sanitizar dados antes de enviar
+      const sanitizedTransaction = {
+        ...transaction,
+        description: ValidationUtils.sanitizeText(transaction.description),
+        value: parseFloat(transaction.value),
+        date: transaction.date
+      };
+
+      const response = await fetch(`${config.API_URL}/transactions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(transaction),
+        body: JSON.stringify(sanitizedTransaction),
       });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
       fetchTransactions();
       toast.success(`${transaction.type === 'entrada' ? 'Receita' : 'Despesa'} adicionada com sucesso!`);
     } catch (error) {
-      console.error('Erro ao adicionar transação:', error);
-      toast.error('Erro ao adicionar transação. Tente novamente.');
+      ErrorHandler.handleApiError(error, 'adicionar transação');
     } finally {
       setLoadingTransactions(false);
     }
-  };
+  }, [fetchTransactions, categories]);
 
-  const deleteTransaction = async (id) => {
+  // Otimizar deleteTransaction com useCallback
+  const deleteTransaction = useCallback(async (id) => {
+    // Validação do ID antes de excluir
+    if (!ValidationUtils.isValidPositiveNumber(id)) {
+      toast.error('ID de transação inválido!');
+      return;
+    }
+
     setLoadingTransactions(true);
     try {
-      await fetch(`${config.API_URL}/transactions/${id}`, {
+      const response = await fetch(`${config.API_URL}/transactions/${id}`, {
         method: 'DELETE',
       });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
       fetchTransactions();
       toast.success('Transação excluída com sucesso!');
     } catch (error) {
-      console.error('Erro ao deletar transação:', error);
-      toast.error('Erro ao excluir transação. Tente novamente.');
+      ErrorHandler.handleApiError(error, 'excluir transação');
     } finally {
       setLoadingTransactions(false);
     }
-  };
+  }, [fetchTransactions]);
 
-  const handleLogin = (user) => {
-    setIsAuthenticated(true);
-    setCurrentUser(user);
-    toast.success(`Bem-vindo, ${user.name}!`);
-  };
+  // Otimizar handleLogin com useCallback
+  const handleLogin = useCallback((user) => {
+    // Validação dos dados do usuário
+    if (!user || !ValidationUtils.isValidCredentials(user.name, user.email)) {
+      toast.error('Dados de usuário inválidos!');
+      return;
+    }
 
-  const handleLogout = () => {
-    setIsAuthenticated(false);
-    setCurrentUser(null);
-    localStorage.removeItem('isAuthenticated');
-    localStorage.removeItem('currentUser');
-    setActiveTab('dashboard');
-    toast.info('Logout realizado com sucesso!');
-  };
+    try {
+      // Sanitizar dados do usuário
+      const sanitizedUser = {
+        name: ValidationUtils.sanitizeText(user.name),
+        email: user.email.toLowerCase().trim()
+      };
+
+      setIsAuthenticated(true);
+      setCurrentUser(sanitizedUser);
+      
+      // Salvar dados do usuário de forma segura
+      localStorage.setItem('isAuthenticated', 'true');
+      localStorage.setItem('currentUser', JSON.stringify(sanitizedUser));
+      
+      toast.success(`Bem-vindo, ${sanitizedUser.name}!`);
+    } catch (error) {
+      ErrorHandler.handleStorageError(error, 'realizar login');
+    }
+  }, []);
+
+  // Otimizar handleLogout com useCallback
+  const handleLogout = useCallback(() => {
+    try {
+      setIsAuthenticated(false);
+      setCurrentUser(null);
+      localStorage.removeItem('isAuthenticated');
+      localStorage.removeItem('currentUser');
+      setActiveTab('dashboard');
+      toast.info('Logout realizado com sucesso!');
+    } catch (error) {
+      ErrorHandler.handleStorageError(error, 'realizar logout');
+    }
+  }, []);
 
   // Funções para despesas recorrentes
   const saveRecurringExpenses = (expenses) => {
@@ -105,34 +605,72 @@ function App() {
   };
 
   const addRecurringExpense = (expense) => {
+    // Validação antes de adicionar
+    if (!ValidationUtils.isValidDescription(expense.description)) {
+      toast.error('Descrição deve ter entre 1 e 100 caracteres!');
+      return;
+    }
+
+    if (!ValidationUtils.isReasonableAmount(expense.value)) {
+      toast.error('Valor deve ser um número positivo até R$ 1.000.000!');
+      return;
+    }
+
+    if (!ValidationUtils.isValidDate(expense.startDate)) {
+      toast.error('Data de início inválida!');
+      return;
+    }
+
+    const validRecurrences = ['mensal', 'semanal', 'anual'];
+    if (!expense.recurrence || !validRecurrences.includes(expense.recurrence)) {
+      toast.error('Recorrência inválida! Use: mensal, semanal ou anual.');
+      return;
+    }
+
+    const validCategories = ['Alimentação', 'Transporte', 'Moradia', 'Saúde', 'Lazer', 'Outros'];
+    if (!ValidationUtils.isValidCategory(expense.category, validCategories)) {
+      toast.error('Categoria inválida!');
+      return;
+    }
+
     setLoadingRecurring(true);
     try {
+      // Sanitizar dados antes de salvar
       const newExpense = {
-        ...expense,
         id: Date.now(),
+        description: ValidationUtils.sanitizeText(expense.description),
+        value: parseFloat(expense.value),
+        startDate: expense.startDate,
+        recurrence: expense.recurrence,
+        category: expense.category,
         createdAt: new Date().toISOString(),
         nextDue: calculateNextDue(expense.startDate, expense.recurrence)
       };
+      
       const updated = [...recurringExpenses, newExpense];
       saveRecurringExpenses(updated);
       toast.success('Despesa recorrente adicionada com sucesso!');
     } catch (error) {
-      console.error('Erro ao adicionar despesa recorrente:', error);
-      toast.error('Erro ao adicionar despesa recorrente. Tente novamente.');
+      ErrorHandler.handleStorageError(error, 'adicionar despesa recorrente');
     } finally {
       setLoadingRecurring(false);
     }
   };
 
   const deleteRecurringExpense = (id) => {
+    // Validação do ID antes de excluir
+    if (!ValidationUtils.isValidPositiveNumber(id)) {
+      toast.error('ID de despesa inválido!');
+      return;
+    }
+
     setLoadingRecurring(true);
     try {
       const updated = recurringExpenses.filter(expense => expense.id !== id);
       saveRecurringExpenses(updated);
       toast.success('Despesa recorrente excluída com sucesso!');
     } catch (error) {
-      console.error('Erro ao excluir despesa recorrente:', error);
-      toast.error('Erro ao excluir despesa recorrente. Tente novamente.');
+      ErrorHandler.handleStorageError(error, 'excluir despesa recorrente');
     } finally {
       setLoadingRecurring(false);
     }
@@ -311,61 +849,80 @@ function App() {
           >
             🔄 Recorrentes
           </button>
+          <button 
+            className={activeTab === 'categorias' ? 'active' : ''} 
+            onClick={() => setActiveTab('categorias')}
+          >
+            🏷️ Categorias
+          </button>
         </nav>
       </header>
 
       <main className="main">
         {loading && <div className="loading">Carregando...</div>}
         
-        {activeTab === 'dashboard' && (
-          <Dashboard 
-            transactions={transactions} 
-            dueAlerts={dueAlerts}
-          />
-        )}
-        
-        {activeTab === 'entradas' && (
-          <LancamentoForm 
-            type="entrada" 
-            onAdd={addTransaction}
-            title="💵 Lançar Entrada"
-          />
-        )}
-        
-        {activeTab === 'despesas' && (
-          <LancamentoForm 
-            type="despesa" 
-            onAdd={addTransaction}
-            title="💸 Lançar Despesa"
-          />
-        )}
-        
-        {activeTab === 'relatorios' && (
-          <Relatorios 
-            transactions={transactions} 
-            loadingExport={loadingExport}
-            setLoadingExport={setLoadingExport}
-          />
-        )}
-        
-        {activeTab === 'historico' && (
-          <Historico 
-            transactions={transactions} 
-            onDelete={deleteTransaction}
-          />
-        )}
-        
-        {activeTab === 'recorrentes' && (
-          <DespesasRecorrentes 
-            expenses={recurringExpenses}
-            onAdd={addRecurringExpense}
-            onDelete={deleteRecurringExpense}
-          />
-        )}
-        
-        {activeTab === 'usuarios' && currentUser?.isAdmin && (
-          <GerenciarUsuarios />
-        )}
+        <Suspense fallback={<SuspenseLoader message="Carregando aba..." />}>
+          {activeTab === 'dashboard' && (
+            <Dashboard 
+              transactions={transactions} 
+              dueAlerts={dueAlerts}
+            />
+          )}
+          
+          {activeTab === 'entradas' && (
+            <LancamentoForm 
+              type="entrada" 
+              onAdd={addTransaction}
+              title="💵 Lançar Entrada"
+              categories={categories}
+            />
+          )}
+          
+          {activeTab === 'despesas' && (
+            <LancamentoForm 
+              type="despesa" 
+              onAdd={addTransaction}
+              title="💸 Lançar Despesa"
+              categories={categories}
+            />
+          )}
+          
+          {activeTab === 'relatorios' && (
+            <Relatorios 
+              transactions={transactions} 
+              loadingExport={loadingExport}
+              setLoadingExport={setLoadingExport}
+            />
+          )}
+          
+          {activeTab === 'historico' && (
+            <Historico 
+              transactions={transactions} 
+              onDelete={deleteTransaction}
+            />
+          )}
+          
+          {activeTab === 'recorrentes' && (
+            <DespesasRecorrentes 
+              expenses={recurringExpenses}
+              onAdd={addRecurringExpense}
+              onDelete={deleteRecurringExpense}
+            />
+          )}
+          
+          {activeTab === 'categorias' && (
+            <CategoryManagement 
+              categories={categories}
+              onAddCategory={addCustomCategory}
+              onUpdateCategory={updateCustomCategory}
+              onDeleteCategory={deleteCustomCategory}
+            />
+          )}
+          
+          {activeTab === 'usuarios' && currentUser?.isAdmin && (
+            <GerenciarUsuarios />
+          )}
+        </Suspense>
       </main>
     </div>
   );
@@ -419,15 +976,15 @@ function LoadingOverlay({ show, message = 'Carregando...' }) {
   );
 }
 
-// Componente de Login
-function Login({ onLogin, loadingAuth, setLoadingAuth }) {
+// Componente de Login otimizado com React.memo
+const Login = React.memo(({ onLogin, loadingAuth, setLoadingAuth }) => {
   const [credentials, setCredentials] = useState({
     username: '',
     password: ''
   });
 
-  // Carregar usuários do localStorage
-  const getUsers = () => {
+  // Memoizar a função getUsers para evitar recriação
+  const getUsers = useCallback(() => {
     const users = localStorage.getItem('financeiro_users');
     return users ? JSON.parse(users) : [
       { 
@@ -437,9 +994,10 @@ function Login({ onLogin, loadingAuth, setLoadingAuth }) {
         isAdmin: true 
       }
     ];
-  };
+  }, []);
 
-  const handleSubmit = (e) => {
+  // Otimizar handleSubmit com useCallback
+  const handleSubmit = useCallback((e) => {
     e.preventDefault();
     setLoadingAuth(true);
     
@@ -464,7 +1022,16 @@ function Login({ onLogin, loadingAuth, setLoadingAuth }) {
     } finally {
       setLoadingAuth(false);
     }
-  };
+  }, [credentials, onLogin, setLoadingAuth, getUsers]);
+
+  // Otimizar handlers de input com useCallback
+  const handleUsernameChange = useCallback((e) => {
+    setCredentials(prev => ({...prev, username: e.target.value}));
+  }, []);
+
+  const handlePasswordChange = useCallback((e) => {
+    setCredentials(prev => ({...prev, password: e.target.value}));
+  }, []);
 
   return (
     <div className="login-container">
@@ -477,7 +1044,7 @@ function Login({ onLogin, loadingAuth, setLoadingAuth }) {
             <input
               type="email"
               value={credentials.username}
-              onChange={(e) => setCredentials({...credentials, username: e.target.value})}
+              onChange={handleUsernameChange}
               placeholder="Digite seu email"
               required
             />
@@ -487,7 +1054,7 @@ function Login({ onLogin, loadingAuth, setLoadingAuth }) {
             <input
               type="password"
               value={credentials.password}
-              onChange={(e) => setCredentials({...credentials, password: e.target.value})}
+              onChange={handlePasswordChange}
               placeholder="Digite sua senha"
               required
             />
@@ -508,7 +1075,7 @@ function Login({ onLogin, loadingAuth, setLoadingAuth }) {
       </div>
     </div>
   );
-}
+});
 
 // Componente para gerenciar usuários (apenas admin)
 function GerenciarUsuarios() {
@@ -661,23 +1228,224 @@ function GerenciarUsuarios() {
   );
 }
 
-// Dashboard com resumo financeiro
-function Dashboard({ transactions, dueAlerts }) {
+// Componente de Gerenciamento de Categorias
+const CategoryManagement = React.memo(({ 
+  categories, 
+  onAddCategory, 
+  onUpdateCategory, 
+  onDeleteCategory 
+}) => {
+  const [activeType, setActiveType] = useState('despesa');
+  const [isAddingCategory, setIsAddingCategory] = useState(false);
+  const [editingCategory, setEditingCategory] = useState(null);
+  const [categoryForm, setCategoryForm] = useState({
+    name: '',
+    icon: '💰',
+    color: '#6b7280'
+  });
+
+  // Resetar formulário
+  const resetForm = useCallback(() => {
+    setCategoryForm({ name: '', icon: '💰', color: '#6b7280' });
+    setIsAddingCategory(false);
+    setEditingCategory(null);
+  }, []);
+
+  // Preparar edição
+  const startEdit = useCallback((category) => {
+    setCategoryForm({
+      name: category.name,
+      icon: category.icon,
+      color: category.color
+    });
+    setEditingCategory(category);
+    setIsAddingCategory(false);
+  }, []);
+
+  // Submeter formulário
+  const handleSubmit = useCallback((e) => {
+    e.preventDefault();
+    
+    if (editingCategory) {
+      // Atualizar categoria existente
+      if (onUpdateCategory(activeType, editingCategory.id, categoryForm)) {
+        resetForm();
+      }
+    } else {
+      // Adicionar nova categoria
+      if (onAddCategory(activeType, categoryForm)) {
+        resetForm();
+      }
+    }
+  }, [editingCategory, activeType, categoryForm, onUpdateCategory, onAddCategory, resetForm]);
+
+  // Confirmar exclusão
+  const handleDelete = useCallback((category) => {
+    if (window.confirm(`Deseja realmente excluir a categoria "${category.name}"?`)) {
+      onDeleteCategory(activeType, category.id);
+    }
+  }, [activeType, onDeleteCategory]);
+
+  return (
+    <div className="category-management">
+      <h2>🏷️ Gerenciar Categorias</h2>
+      
+      <div className="category-type-tabs">
+        <button 
+          className={activeType === 'despesa' ? 'active' : ''}
+          onClick={() => setActiveType('despesa')}
+        >
+          💸 Despesas
+        </button>
+        <button 
+          className={activeType === 'entrada' ? 'active' : ''}
+          onClick={() => setActiveType('entrada')}
+        >
+          💵 Receitas
+        </button>
+      </div>
+
+      <div className="category-actions">
+        <button 
+          className="add-category-btn"
+          onClick={() => setIsAddingCategory(true)}
+          disabled={isAddingCategory || editingCategory}
+        >
+          ➕ Nova Categoria
+        </button>
+      </div>
+
+      {(isAddingCategory || editingCategory) && (
+        <form className="category-form" onSubmit={handleSubmit}>
+          <h3>{editingCategory ? 'Editar Categoria' : 'Nova Categoria'}</h3>
+          
+          <div className="form-group">
+            <label>Nome da Categoria:</label>
+            <input
+              type="text"
+              value={categoryForm.name}
+              onChange={(e) => setCategoryForm({...categoryForm, name: e.target.value})}
+              placeholder="Ex: Educação, Investimentos..."
+              maxLength={30}
+              required
+            />
+          </div>
+
+          <div className="form-group">
+            <label>Ícone:</label>
+            <div className="icon-selector">
+              {CategoryManager.availableIcons.map(icon => (
+                <button
+                  key={icon}
+                  type="button"
+                  className={`icon-option ${categoryForm.icon === icon ? 'selected' : ''}`}
+                  onClick={() => setCategoryForm({...categoryForm, icon})}
+                >
+                  {icon}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="form-group">
+            <label>Cor:</label>
+            <div className="color-selector">
+              {CategoryManager.availableColors.map(color => (
+                <button
+                  key={color}
+                  type="button"
+                  className={`color-option ${categoryForm.color === color ? 'selected' : ''}`}
+                  style={{ backgroundColor: color }}
+                  onClick={() => setCategoryForm({...categoryForm, color})}
+                />
+              ))}
+            </div>
+          </div>
+
+          <div className="form-actions">
+            <button type="submit" className="save-btn">
+              {editingCategory ? 'Atualizar' : 'Criar'} Categoria
+            </button>
+            <button type="button" className="cancel-btn" onClick={resetForm}>
+              Cancelar
+            </button>
+          </div>
+        </form>
+      )}
+
+      <div className="categories-list">
+        <h3>Categorias de {activeType === 'entrada' ? 'Receitas' : 'Despesas'}</h3>
+        
+        <div className="categories-grid">
+          {categories[activeType]?.map(category => (
+            <div 
+              key={category.id} 
+              className={`category-item ${category.custom ? 'custom' : 'default'}`}
+              style={{ borderLeftColor: category.color }}
+            >
+              <div className="category-info">
+                <span className="category-icon">{category.icon}</span>
+                <span className="category-name">{category.name}</span>
+                {category.custom && <span className="custom-badge">Personalizada</span>}
+              </div>
+              
+              {category.custom && (
+                <div className="category-actions">
+                  <button 
+                    className="edit-btn"
+                    onClick={() => startEdit(category)}
+                    disabled={isAddingCategory || editingCategory}
+                  >
+                    ✏️
+                  </button>
+                  <button 
+                    className="delete-btn"
+                    onClick={() => handleDelete(category)}
+                    disabled={isAddingCategory || editingCategory}
+                  >
+                    🗑️
+                  </button>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+});
+
+// Dashboard com resumo financeiro otimizado
+const Dashboard = React.memo(({ transactions, dueAlerts }) => {
   const currentMonth = new Date().toISOString().slice(0, 7);
   
-  const monthlyTransactions = transactions.filter(t => 
-    t.date.startsWith(currentMonth)
+  // Otimizar filtro de transações mensais com useMemo
+  const monthlyTransactions = useMemo(() => 
+    transactions.filter(t => t.date.startsWith(currentMonth)), 
+    [transactions, currentMonth]
   );
   
-  const totalEntradas = monthlyTransactions
-    .filter(t => t.type === 'entrada')
-    .reduce((sum, t) => sum + parseFloat(t.value), 0);
+  // Otimizar cálculo de entradas com useMemo
+  const totalEntradas = useMemo(() => 
+    monthlyTransactions
+      .filter(t => t.type === 'entrada')
+      .reduce((sum, t) => sum + parseFloat(t.value), 0),
+    [monthlyTransactions]
+  );
     
-  const totalDespesas = monthlyTransactions
-    .filter(t => t.type === 'despesa')
-    .reduce((sum, t) => sum + parseFloat(t.value), 0);
+  // Otimizar cálculo de despesas com useMemo
+  const totalDespesas = useMemo(() => 
+    monthlyTransactions
+      .filter(t => t.type === 'despesa')
+      .reduce((sum, t) => sum + parseFloat(t.value), 0),
+    [monthlyTransactions]
+  );
     
-  const saldo = totalEntradas - totalDespesas;
+  // Otimizar cálculo de saldo com useMemo
+  const saldo = useMemo(() => 
+    totalEntradas - totalDespesas, 
+    [totalEntradas, totalDespesas]
+  );
 
   return (
     <div className="dashboard">
@@ -732,7 +1500,7 @@ function Dashboard({ transactions, dueAlerts }) {
       </div>
     </div>
   );
-}
+});
 
 // Componente de Despesas Recorrentes
 function DespesasRecorrentes({ expenses, onAdd, onDelete }) {
@@ -872,8 +1640,8 @@ function DespesasRecorrentes({ expenses, onAdd, onDelete }) {
   );
 }
 
-// Formulário de lançamento
-function LancamentoForm({ type, onAdd, title }) {
+// Formulário de lançamento otimizado
+const LancamentoForm = React.memo(({ type, onAdd, title, categories }) => {
   const [form, setForm] = useState({
     description: '',
     value: '',
@@ -881,11 +1649,13 @@ function LancamentoForm({ type, onAdd, title }) {
     date: new Date().toISOString().slice(0, 10)
   });
 
-  const categorias = type === 'entrada' 
-    ? ['Salário', 'Freelance', 'Investimentos', 'Outros']
-    : ['Alimentação', 'Transporte', 'Moradia', 'Saúde', 'Lazer', 'Outros'];
+  // Usar categorias dinâmicas
+  const availableCategories = useMemo(() => 
+    categories?.[type] || [], 
+    [categories, type]
+  );
 
-  const handleSubmit = (e) => {
+  const handleSubmit = useCallback((e) => {
     e.preventDefault();
     if (!form.description || !form.value || !form.category) {
       toast.error('Preencha todos os campos obrigatórios!');
@@ -909,7 +1679,7 @@ function LancamentoForm({ type, onAdd, title }) {
       category: '',
       date: new Date().toISOString().slice(0, 10)
     });
-  };
+  }, [form, type, onAdd]);
 
   return (
     <div className="lancamento-form">
@@ -947,8 +1717,10 @@ function LancamentoForm({ type, onAdd, title }) {
             required
           >
             <option value="">Selecione uma categoria</option>
-            {categorias.map(cat => (
-              <option key={cat} value={cat}>{cat}</option>
+            {availableCategories.map(cat => (
+              <option key={cat.id} value={cat.id}>
+                {cat.icon} {cat.name}
+              </option>
             ))}
           </select>
         </div>
@@ -969,7 +1741,7 @@ function LancamentoForm({ type, onAdd, title }) {
       </form>
     </div>
   );
-}
+});
 
 // Relatórios mensais
 function Relatorios({ transactions, loadingExport, setLoadingExport }) {
@@ -1053,28 +1825,51 @@ function Relatorios({ transactions, loadingExport, setLoadingExport }) {
 
   // Função para exportar para CSV
   const exportToCSV = async () => {
+    // Validação dos dados antes de exportar
+    if (!monthlyData || monthlyData.length === 0) {
+      toast.error('Não há dados para exportar!');
+      return;
+    }
+
+    if (!selectedMonth || !ValidationUtils.isNotEmpty(selectedMonth)) {
+      toast.error('Mês selecionado inválido!');
+      return;
+    }
+
     setLoadingExport(true);
     try {
       const csvData = [
         ['Data', 'Descrição', 'Categoria', 'Tipo', 'Valor (R$)']
       ];
-    monthlyData.forEach(t => {
-      csvData.push([
-        new Date(t.date).toLocaleDateString('pt-BR'),
-        t.description,
-        t.category,
-        t.type === 'entrada' ? 'Entrada' : 'Despesa',
-        parseFloat(t.value).toFixed(2)
-      ]);
-    });
+      
+      // Validar e sanitizar cada transação antes de exportar
+      monthlyData.forEach(t => {
+        if (t && ValidationUtils.isValidDate(t.date) && ValidationUtils.isNotEmpty(t.description)) {
+          csvData.push([
+            new Date(t.date).toLocaleDateString('pt-BR'),
+            ValidationUtils.sanitizeText(t.description),
+            t.category || 'Outros',
+            t.type === 'entrada' ? 'Entrada' : 'Despesa',
+            ValidationUtils.isValidPositiveNumber(t.value) ? parseFloat(t.value).toFixed(2) : '0.00'
+          ]);
+        }
+      });
 
-    const csv = csvData.map(row => row.join(',')).join('\n');
-    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
-    saveAs(blob, `transacoes-${selectedMonth}.csv`);
-    toast.success('Relatório CSV exportado com sucesso!');
+      if (csvData.length <= 1) {
+        toast.error('Nenhum dado válido encontrado para exportar!');
+        return;
+      }
+
+      const csv = csvData.map(row => row.join(',')).join('\n');
+      const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+      
+      // Sanitizar nome do arquivo
+      const fileName = `transacoes-${ValidationUtils.sanitizeText(selectedMonth)}.csv`;
+      saveAs(blob, fileName);
+      
+      toast.success(`Relatório CSV exportado com sucesso! ${csvData.length - 1} transações exportadas.`);
     } catch (error) {
-      console.error('Erro ao exportar CSV:', error);
-      toast.error('Erro ao exportar relatório CSV. Tente novamente.');
+      ErrorHandler.handleApiError(error, 'exportar relatório CSV');
     } finally {
       setLoadingExport(false);
     }
@@ -1135,16 +1930,27 @@ function Relatorios({ transactions, loadingExport, setLoadingExport }) {
   );
 }
 
-// Histórico de transações
-function Historico({ transactions, onDelete }) {
+// Histórico de transações otimizado
+const Historico = React.memo(({ transactions, onDelete }) => {
   const [filter, setFilter] = useState('all');
   const [monthFilter, setMonthFilter] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
 
-  const filteredTransactions = transactions.filter(t => {
-    const typeMatch = filter === 'all' || t.type === filter;
-    const monthMatch = !monthFilter || t.date.startsWith(monthFilter);
-    return typeMatch && monthMatch;
-  }).reverse();
+  // Implementar debounce na busca
+  const debouncedSearchTerm = useDebounce(searchTerm, 300);
+
+  // Otimizar filtros com useMemo incluindo busca
+  const filteredTransactions = useMemo(() => 
+    transactions.filter(t => {
+      const typeMatch = filter === 'all' || t.type === filter;
+      const monthMatch = !monthFilter || t.date.startsWith(monthFilter);
+      const searchMatch = !debouncedSearchTerm || 
+        t.description.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
+        t.category.toLowerCase().includes(debouncedSearchTerm.toLowerCase());
+      return typeMatch && monthMatch && searchMatch;
+    }).reverse(),
+    [transactions, filter, monthFilter, debouncedSearchTerm]
+  );
 
   // Função para exportar histórico para Excel
   const exportHistoricoToExcel = () => {
@@ -1195,6 +2001,14 @@ function Historico({ transactions, onDelete }) {
           placeholder="Filtrar por mês"
         />
         
+        <input
+          type="text"
+          value={searchTerm}
+          onChange={e => setSearchTerm(e.target.value)}
+          placeholder="🔍 Buscar descrição ou categoria..."
+          className="search-input"
+        />
+        
         <button onClick={exportHistoricoToExcel} className="export-btn excel">
           📊 Exportar
         </button>
@@ -1226,22 +2040,8 @@ function Historico({ transactions, onDelete }) {
           </div>
         ))}
       </div>
-      
-      {/* Container de Notificações Toast */}
-      <ToastContainer
-        position="top-right"
-        autoClose={3000}
-        hideProgressBar={false}
-        newestOnTop={false}
-        closeOnClick
-        rtl={false}
-        pauseOnFocusLoss
-        draggable
-        pauseOnHover
-        theme="light"
-      />
     </div>
   );
-}
+});
 
 export default App;
