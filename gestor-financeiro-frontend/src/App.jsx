@@ -341,7 +341,11 @@ function App() {
         )}
         
         {activeTab === 'relatorios' && (
-          <Relatorios transactions={transactions} />
+          <Relatorios 
+            transactions={transactions} 
+            loadingExport={loadingExport}
+            setLoadingExport={setLoadingExport}
+          />
         )}
         
         {activeTab === 'historico' && (
@@ -968,7 +972,7 @@ function LancamentoForm({ type, onAdd, title }) {
 }
 
 // Relatórios mensais
-function Relatorios({ transactions }) {
+function Relatorios({ transactions, loadingExport, setLoadingExport }) {
   const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7));
   
   const monthlyData = transactions.filter(t => 
