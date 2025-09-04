@@ -31,7 +31,83 @@ app.get('/api/health', (req, res) => {
 });
 
 // Criar/conectar ao banco de dados
-const db = new sqlite3.Database('./financeiro.db');
+const db = new sqlite3.Database('./financeiro.db', (err) => {
+  if (err) {
+    console.error('❌ Erro ao conectar com o banco:', err.message);
+  } else {
+    console.log('✅ Conectado ao banco SQLite');
+  }
+});
+
+// Adicionar backup automático e restore
+const fs = require('fs');
+const backupPath = './backup_financeiro.json';
+
+// Função para fazer backup dos dados
+const backupData = async () => {
+  try {
+    const users = await new Promise((resolve, reject) => {
+      db.all('SELECT * FROM users', (err, rows) => {
+        if (err) reject(err);
+        else resolve(rows);
+      });
+    });
+    
+    const transactions = await new Promise((resolve, reject) => {
+      db.all('SELECT * FROM transactions', (err, rows) => {
+        if (err) reject(err);
+        else resolve(rows);
+      });
+    });
+    
+    const backup = {
+      timestamp: new Date().toISOString(),
+      users: users,
+      transactions: transactions
+    };
+    
+    fs.writeFileSync(backupPath, JSON.stringify(backup, null, 2));
+    console.log('✅ Backup criado:', new Date().toLocaleString());
+  } catch (error) {
+    console.error('❌ Erro no backup:', error);
+  }
+};
+
+// Função para restaurar dados do backup
+const restoreData = async () => {
+  try {
+    if (fs.existsSync(backupPath)) {
+      const backup = JSON.parse(fs.readFileSync(backupPath, 'utf8'));
+      console.log('🔄 Restaurando backup de:', backup.timestamp);
+      
+      // Restaurar usuários
+      for (const user of backup.users) {
+        await new Promise((resolve, reject) => {
+          db.run(
+            'INSERT OR REPLACE INTO users (id, name, email, password, role, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+            [user.id, user.name, user.email, user.password, user.role, user.created_at],
+            (err) => err ? reject(err) : resolve()
+          );
+        });
+      }
+      
+      // Restaurar transações
+      for (const transaction of backup.transactions) {
+        await new Promise((resolve, reject) => {
+          db.run(
+            'INSERT OR REPLACE INTO transactions (id, type, description, category, value, date, userId, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+            [transaction.id, transaction.type, transaction.description, transaction.category, transaction.value, transaction.date, transaction.userId, transaction.created_at],
+            (err) => err ? reject(err) : resolve()
+          );
+        });
+      }
+      
+      console.log('✅ Dados restaurados com sucesso!');
+    }
+  } catch (error) {
+    console.error('❌ Erro na restauração:', error);
+  }
+};
 
 // Criar e migrar tabelas
 db.serialize(() => {
@@ -118,6 +194,13 @@ db.serialize(() => {
       console.log('✅ Tabela transactions já existe e está atualizada');
     }
   });
+  
+  // Restaurar dados do backup após criar/verificar tabelas
+  setTimeout(() => {
+    restoreData().then(() => {
+      console.log('🔄 Verificação de backup concluída');
+    });
+  }, 1000);
 });
 
 // Função para criar usuário admin
@@ -184,6 +267,10 @@ app.post('/transactions', (req, res) => {
         console.error(err);
         return res.status(500).json({ error: err.message });
       }
+      
+      // Fazer backup após inserção
+      setTimeout(() => backupData(), 100);
+      
       res.json({ 
         id: this.lastID,
         message: 'Transação criada com sucesso'
@@ -227,6 +314,9 @@ app.delete('/transactions/:id', (req, res) => {
         if (this.changes === 0) {
           return res.status(404).json({ error: 'Transação não encontrada' });
         }
+        
+        // Fazer backup após exclusão
+        setTimeout(() => backupData(), 100);
         
         res.json({ message: 'Transação deletada com sucesso' });
       });
