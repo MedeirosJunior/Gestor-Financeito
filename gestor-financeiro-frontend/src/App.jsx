@@ -298,9 +298,16 @@ function App() {
 
   // Verificar autenticação no localStorage com validação mais rigorosa
   useEffect(() => {
+    console.log('🔍 Verificando autenticação no localStorage...');
     const authStatus = localStorage.getItem('isAuthenticated');
     const userData = localStorage.getItem('currentUser');
     const authTimestamp = localStorage.getItem('authTimestamp');
+    
+    console.log('📋 Dados do localStorage:', {
+      authStatus,
+      userData,
+      authTimestamp
+    });
     
     // Verificar se a autenticação é válida e não expirou (24 horas)
     if (authStatus === 'true' && userData && authTimestamp) {
@@ -308,19 +315,28 @@ function App() {
       const authTime = parseInt(authTimestamp);
       const twentyFourHours = 24 * 60 * 60 * 1000; // 24 horas em ms
       
+      console.log('⏰ Verificando expiração:', {
+        now,
+        authTime,
+        difference: now - authTime,
+        expired: (now - authTime) >= twentyFourHours
+      });
+      
       if (now - authTime < twentyFourHours) {
         try {
           const user = JSON.parse(userData);
+          console.log('✅ Usuário válido encontrado:', user);
           setIsAuthenticated(true);
           setCurrentUser(user);
         } catch (error) {
-          console.error('Erro ao fazer parse dos dados do usuário:', error);
+          console.error('❌ Erro ao fazer parse dos dados do usuário:', error);
           // Limpar dados corrompidos
           localStorage.removeItem('isAuthenticated');
           localStorage.removeItem('currentUser');
           localStorage.removeItem('authTimestamp');
         }
       } else {
+        console.log('⏰ Sessão expirada - limpando dados');
         // Sessão expirada - limpar dados
         localStorage.removeItem('isAuthenticated');
         localStorage.removeItem('currentUser');
@@ -538,7 +554,10 @@ function App() {
     console.log('=== CARREGANDO TRANSAÇÕES ===');
     console.log('API disponível:', isApiAvailable);
     console.log('API checada:', apiChecked);
-    console.log('Usuário:', currentUser?.email);
+    console.log('CurrentUser objeto completo:', currentUser);
+    console.log('CurrentUser email:', currentUser?.email);
+    console.log('CurrentUser name:', currentUser?.name);
+    console.log('Usuário autenticado:', isAuthenticated);
     
     // Se API não está disponível, não carregar nada
     if (!isApiAvailable || !apiChecked) {
@@ -550,7 +569,28 @@ function App() {
     }
 
     if (!currentUser?.email) {
-      console.log('❌ Usuário não logado');
+      console.log('❌ Usuário não logado - currentUser:', currentUser);
+      console.log('❌ localStorage dados:', {
+        isAuthenticated: localStorage.getItem('isAuthenticated'),
+        currentUser: localStorage.getItem('currentUser'),
+        authTimestamp: localStorage.getItem('authTimestamp')
+      });
+      
+      // Se está autenticado mas currentUser está vazio, recarregar dos dados do localStorage
+      if (isAuthenticated) {
+        console.log('🔄 Tentando recarregar dados do usuário do localStorage...');
+        const userData = localStorage.getItem('currentUser');
+        if (userData) {
+          try {
+            const user = JSON.parse(userData);
+            console.log('🔄 Dados encontrados no localStorage:', user);
+            setCurrentUser(user);
+            return; // Sair para que o useEffect execute novamente
+          } catch (error) {
+            console.error('❌ Erro ao fazer parse dos dados do localStorage:', error);
+          }
+        }
+      }
       return;
     }
 
@@ -581,7 +621,7 @@ function App() {
     } finally {
       setLoading(false);
     }
-  }, [currentUser, isApiAvailable, apiChecked]);
+  }, [currentUser, isApiAvailable, apiChecked, isAuthenticated, setCurrentUser]);
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -722,8 +762,11 @@ function App() {
 
   // Otimizar handleLogin com useCallback
   const handleLogin = useCallback((user) => {
+    console.log('🔐 HandleLogin chamado com:', user);
+    
     // Validação dos dados do usuário
     if (!user || !ValidationUtils.isValidCredentials(user.name, user.email)) {
+      console.log('❌ Dados de usuário inválidos:', user);
       toast.error('Dados de usuário inválidos!');
       return;
     }
@@ -735,6 +778,8 @@ function App() {
         email: user.email.toLowerCase().trim()
       };
 
+      console.log('🧹 Usuário sanitizado:', sanitizedUser);
+
       setIsAuthenticated(true);
       setCurrentUser(sanitizedUser);
       
@@ -742,6 +787,12 @@ function App() {
       localStorage.setItem('isAuthenticated', 'true');
       localStorage.setItem('currentUser', JSON.stringify(sanitizedUser));
       localStorage.setItem('authTimestamp', new Date().getTime().toString());
+      
+      console.log('💾 Dados salvos no localStorage:', {
+        isAuthenticated: localStorage.getItem('isAuthenticated'),
+        currentUser: localStorage.getItem('currentUser'),
+        authTimestamp: localStorage.getItem('authTimestamp')
+      });
       
       toast.success(`Bem-vindo, ${sanitizedUser.name}!`);
     } catch (error) {
