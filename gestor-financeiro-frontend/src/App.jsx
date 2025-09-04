@@ -12,6 +12,10 @@ function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [loadingTransactions, setLoadingTransactions] = useState(false);
+  const [loadingRecurring, setLoadingRecurring] = useState(false);
+  const [loadingExport, setLoadingExport] = useState(false);
+  const [loadingAuth, setLoadingAuth] = useState(false);
   const [recurringExpenses, setRecurringExpenses] = useState([]);
   const [dueAlerts, setDueAlerts] = useState([]);
 
@@ -45,6 +49,7 @@ function App() {
   }, [isAuthenticated]);
 
   const addTransaction = async (transaction) => {
+    setLoadingTransactions(true);
     try {
       await fetch(`${config.API_URL}/transactions`, {
         method: 'POST',
@@ -56,10 +61,13 @@ function App() {
     } catch (error) {
       console.error('Erro ao adicionar transação:', error);
       toast.error('Erro ao adicionar transação. Tente novamente.');
+    } finally {
+      setLoadingTransactions(false);
     }
   };
 
   const deleteTransaction = async (id) => {
+    setLoadingTransactions(true);
     try {
       await fetch(`${config.API_URL}/transactions/${id}`, {
         method: 'DELETE',
@@ -69,6 +77,8 @@ function App() {
     } catch (error) {
       console.error('Erro ao deletar transação:', error);
       toast.error('Erro ao excluir transação. Tente novamente.');
+    } finally {
+      setLoadingTransactions(false);
     }
   };
 
@@ -95,21 +105,37 @@ function App() {
   };
 
   const addRecurringExpense = (expense) => {
-    const newExpense = {
-      ...expense,
-      id: Date.now(),
-      createdAt: new Date().toISOString(),
-      nextDue: calculateNextDue(expense.startDate, expense.recurrence)
-    };
-    const updated = [...recurringExpenses, newExpense];
-    saveRecurringExpenses(updated);
-    toast.success('Despesa recorrente adicionada com sucesso!');
+    setLoadingRecurring(true);
+    try {
+      const newExpense = {
+        ...expense,
+        id: Date.now(),
+        createdAt: new Date().toISOString(),
+        nextDue: calculateNextDue(expense.startDate, expense.recurrence)
+      };
+      const updated = [...recurringExpenses, newExpense];
+      saveRecurringExpenses(updated);
+      toast.success('Despesa recorrente adicionada com sucesso!');
+    } catch (error) {
+      console.error('Erro ao adicionar despesa recorrente:', error);
+      toast.error('Erro ao adicionar despesa recorrente. Tente novamente.');
+    } finally {
+      setLoadingRecurring(false);
+    }
   };
 
   const deleteRecurringExpense = (id) => {
-    const updated = recurringExpenses.filter(expense => expense.id !== id);
-    saveRecurringExpenses(updated);
-    toast.success('Despesa recorrente excluída com sucesso!');
+    setLoadingRecurring(true);
+    try {
+      const updated = recurringExpenses.filter(expense => expense.id !== id);
+      saveRecurringExpenses(updated);
+      toast.success('Despesa recorrente excluída com sucesso!');
+    } catch (error) {
+      console.error('Erro ao excluir despesa recorrente:', error);
+      toast.error('Erro ao excluir despesa recorrente. Tente novamente.');
+    } finally {
+      setLoadingRecurring(false);
+    }
   };
 
   // Calcular próxima data de vencimento
@@ -211,11 +237,20 @@ function App() {
 
   // Se não estiver autenticado, mostrar tela de login
   if (!isAuthenticated) {
-    return <Login onLogin={handleLogin} />;
+    return <Login onLogin={handleLogin} loadingAuth={loadingAuth} setLoadingAuth={setLoadingAuth} />;
   }
 
   return (
     <div className="app">
+      <LoadingOverlay 
+        show={loadingTransactions} 
+        message="Processando transação..." 
+      />
+      <LoadingOverlay 
+        show={loadingRecurring} 
+        message="Processando despesa recorrente..." 
+      />
+      
       <header className="header">
         <div className="header-top">
           <h1>💰 Gestor Financeiro</h1>
@@ -332,8 +367,56 @@ function App() {
   );
 }
 
+// Componentes de Loading
+function Spinner({ size = '20px', color = '#007bff' }) {
+  return (
+    <div 
+      className="spinner"
+      style={{
+        width: size,
+        height: size,
+        borderColor: `${color}33`,
+        borderTopColor: color
+      }}
+    />
+  );
+}
+
+function ButtonSpinner({ loading, children, onClick, className = '', disabled = false, ...props }) {
+  return (
+    <button
+      className={`${className} ${loading ? 'loading' : ''}`}
+      onClick={onClick}
+      disabled={disabled || loading}
+      {...props}
+    >
+      {loading ? (
+        <>
+          <Spinner size="16px" color="currentColor" />
+          <span style={{ marginLeft: '8px' }}>Carregando...</span>
+        </>
+      ) : (
+        children
+      )}
+    </button>
+  );
+}
+
+function LoadingOverlay({ show, message = 'Carregando...' }) {
+  if (!show) return null;
+  
+  return (
+    <div className="loading-overlay">
+      <div className="loading-content">
+        <Spinner size="40px" />
+        <span>{message}</span>
+      </div>
+    </div>
+  );
+}
+
 // Componente de Login
-function Login({ onLogin }) {
+function Login({ onLogin, loadingAuth, setLoadingAuth }) {
   const [credentials, setCredentials] = useState({
     username: '',
     password: ''
@@ -354,19 +437,28 @@ function Login({ onLogin }) {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    const users = getUsers();
+    setLoadingAuth(true);
+    
+    try {
+      const users = getUsers();
 
-    // Verificar login
-    const user = users.find(user => 
-      user.username === credentials.username && user.password === credentials.password
-    );
+      // Verificar login
+      const user = users.find(user => 
+        user.username === credentials.username && user.password === credentials.password
+      );
 
-    if (user) {
-      onLogin(user);
-      localStorage.setItem('isAuthenticated', 'true');
-      localStorage.setItem('currentUser', JSON.stringify(user));
-    } else {
-      toast.error('Usuário ou senha incorretos!');
+      if (user) {
+        onLogin(user);
+        localStorage.setItem('isAuthenticated', 'true');
+        localStorage.setItem('currentUser', JSON.stringify(user));
+      } else {
+        toast.error('Usuário ou senha incorretos!');
+      }
+    } catch (error) {
+      console.error('Erro no login:', error);
+      toast.error('Erro no login. Tente novamente.');
+    } finally {
+      setLoadingAuth(false);
     }
   };
 
@@ -396,9 +488,13 @@ function Login({ onLogin }) {
               required
             />
           </div>
-          <button type="submit" className="login-btn">
+          <ButtonSpinner 
+            type="submit" 
+            className="login-btn" 
+            loading={loadingAuth}
+          >
             Entrar
-          </button>
+          </ButtonSpinner>
         </form>
         
         <div className="login-info">
@@ -891,8 +987,10 @@ function Relatorios({ transactions }) {
   });
 
   // Função para exportar para Excel
-  const exportToExcel = () => {
-    const workbook = XLSX.utils.book_new();
+  const exportToExcel = async () => {
+    setLoadingExport(true);
+    try {
+      const workbook = XLSX.utils.book_new();
     
     // Aba 1: Resumo do Mês
     const resumoData = [
@@ -941,13 +1039,21 @@ function Relatorios({ transactions }) {
     const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
     saveAs(blob, `relatorio-financeiro-${selectedMonth}.xlsx`);
     toast.success('Relatório Excel exportado com sucesso!');
+    } catch (error) {
+      console.error('Erro ao exportar Excel:', error);
+      toast.error('Erro ao exportar relatório Excel. Tente novamente.');
+    } finally {
+      setLoadingExport(false);
+    }
   };
 
   // Função para exportar para CSV
-  const exportToCSV = () => {
-    const csvData = [
-      ['Data', 'Descrição', 'Categoria', 'Tipo', 'Valor (R$)']
-    ];
+  const exportToCSV = async () => {
+    setLoadingExport(true);
+    try {
+      const csvData = [
+        ['Data', 'Descrição', 'Categoria', 'Tipo', 'Valor (R$)']
+      ];
     monthlyData.forEach(t => {
       csvData.push([
         new Date(t.date).toLocaleDateString('pt-BR'),
@@ -962,6 +1068,12 @@ function Relatorios({ transactions }) {
     const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
     saveAs(blob, `transacoes-${selectedMonth}.csv`);
     toast.success('Relatório CSV exportado com sucesso!');
+    } catch (error) {
+      console.error('Erro ao exportar CSV:', error);
+      toast.error('Erro ao exportar relatório CSV. Tente novamente.');
+    } finally {
+      setLoadingExport(false);
+    }
   };
 
   return (
@@ -978,12 +1090,20 @@ function Relatorios({ transactions }) {
       </div>
 
       <div className="export-buttons">
-        <button onClick={exportToExcel} className="export-btn excel">
+        <ButtonSpinner 
+          onClick={exportToExcel} 
+          className="export-btn excel" 
+          loading={loadingExport}
+        >
           📊 Exportar Excel
-        </button>
-        <button onClick={exportToCSV} className="export-btn csv">
+        </ButtonSpinner>
+        <ButtonSpinner 
+          onClick={exportToCSV} 
+          className="export-btn csv" 
+          loading={loadingExport}
+        >
           📄 Exportar CSV
-        </button>
+        </ButtonSpinner>
       </div>
 
       <div className="report-summary">

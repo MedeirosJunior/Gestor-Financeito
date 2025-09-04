@@ -1055,6 +1055,113 @@ body {
   }
 }
 
+/* Componentes de Loading */
+.spinner {
+  display: inline-block;
+  width: 20px;
+  height: 20px;
+  border: 2px solid transparent;
+  border-top: 2px solid currentColor;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Button Spinner */
+button.loading {
+  opacity: 0.7;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+button.loading .spinner {
+  border-color: currentColor transparent transparent transparent;
+}
+
+/* Loading Overlay */
+.loading-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+
+.loading-content {
+  background: white;
+  padding: 30px;
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 15px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+}
+
+.loading-content span {
+  font-size: 16px;
+  color: #333;
+  font-weight: 500;
+}
+
+/* Loading States para botões específicos */
+.export-btn.loading,
+.recurring-form button.loading,
+.transaction-form button.loading {
+  background: #ccc !important;
+  color: #666 !important;
+}
+
+/* Animação de pulse para elementos carregando */
+.loading-pulse {
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0% { opacity: 1; }
+  50% { opacity: 0.5; }
+  100% { opacity: 1; }
+}
+
+/* Skeleton loading para listas */
+.skeleton {
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: loading 1.5s infinite;
+}
+
+@keyframes loading {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.skeleton-item {
+  height: 60px;
+  margin-bottom: 10px;
+  border-radius: 8px;
+}
+
+/* Responsividade para loading */
+@media (max-width: 768px) {
+  .loading-content {
+    padding: 20px;
+    margin: 20px;
+  }
+  
+  .loading-content span {
+    font-size: 14px;
+  }
+}
+
 /* Alertas de Vencimento */
 .due-alerts {
   background: white;
