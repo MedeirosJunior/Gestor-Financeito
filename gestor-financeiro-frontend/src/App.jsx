@@ -969,15 +969,13 @@ function App() {
             </div>
             <div className="user-info">
               <span>👤 {currentUser?.name || currentUser?.username}</span>
-              {currentUser?.isAdmin && (
-                <button 
-                  className={activeTab === 'usuarios' ? 'active' : ''} 
-                  onClick={() => setActiveTab('usuarios')}
-                  title="Gerenciar Usuários"
-                >
-                  👥 Usuários
-                </button>
-              )}
+              <button 
+                className={activeTab === 'usuarios' ? 'active' : ''} 
+                onClick={() => setActiveTab('usuarios')}
+                title="Gerenciar Usuários"
+              >
+                👥 Usuários
+              </button>
               <button 
                 className="logout-btn" 
                 onClick={handleLogout}
@@ -1098,7 +1096,7 @@ function App() {
             />
           )}
           
-          {activeTab === 'usuarios' && currentUser?.isAdmin && (
+          {activeTab === 'usuarios' && (
             <GerenciarUsuarios />
           )}
         </Suspense>
@@ -1252,6 +1250,19 @@ const Login = React.memo(({ onLogin, loadingAuth, setLoadingAuth }) => {
         <div className="login-info">
           <p><strong>Admin:</strong> admin@gestor.com</p>
           <p><strong>Senha:</strong> j92953793*/*</p>
+        </div>
+        
+        <div className="login-actions">
+          <button 
+            type="button" 
+            className="clear-data-btn"
+            onClick={() => {
+              localStorage.clear();
+              window.location.reload();
+            }}
+          >
+            🧹 Limpar Dados do Navegador
+          </button>
         </div>
       </div>
     </div>
@@ -1710,13 +1721,30 @@ const Dashboard = React.memo(({ transactions, dueAlerts }) => {
       )}
 
       <div className="recent-transactions">
-        <h3>Últimas Transações</h3>
-        {transactions.slice(-5).reverse().map(transaction => (
-          <div key={transaction.id} className={`transaction-item ${transaction.type}`}>
-            <span>{transaction.description}</span>
-            <span>{transaction.type === 'entrada' ? '+' : '-'}R$ {parseFloat(transaction.value).toFixed(2)}</span>
-          </div>
-        ))}
+        <h3>📋 Últimas Transações</h3>
+        {transactions.length === 0 ? (
+          <p className="no-transactions">Nenhuma transação encontrada</p>
+        ) : (
+          transactions.slice(-5).reverse().map(transaction => (
+            <div key={transaction.id} className={`transaction-item ${transaction.type}`}>
+              <div className="transaction-info">
+                <span className="transaction-icon">
+                  {transaction.type === 'entrada' ? '💵' : '💸'}
+                </span>
+                <div className="transaction-details">
+                  <span className="transaction-description">{transaction.description}</span>
+                  <span className="transaction-category">🏷️ {transaction.category}</span>
+                </div>
+              </div>
+              <div className="transaction-amount">
+                <span className={`amount ${transaction.type}`}>
+                  {transaction.type === 'entrada' ? '+' : '-'}R$ {parseFloat(transaction.value).toFixed(2)}
+                </span>
+                <span className="transaction-date">📅 {new Date(transaction.date).toLocaleDateString()}</span>
+              </div>
+            </div>
+          ))
+        )}
       </div>
     </div>
   );
