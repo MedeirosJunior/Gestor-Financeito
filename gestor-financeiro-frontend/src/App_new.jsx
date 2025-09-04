@@ -10,8 +10,6 @@ function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [recurringExpenses, setRecurringExpenses] = useState([]);
-  const [dueAlerts, setDueAlerts] = useState([]);
 
   // Verificar autenticação no localStorage
   useEffect(() => {
@@ -79,129 +77,6 @@ function App() {
     setActiveTab('dashboard');
   };
 
-  // Funções para despesas recorrentes
-  const fetchRecurringExpenses = () => {
-    const saved = localStorage.getItem('recurringExpenses');
-    if (saved) {
-      const expenses = JSON.parse(saved);
-      setRecurringExpenses(expenses);
-      checkDueExpenses(expenses);
-    }
-  };
-
-  const saveRecurringExpenses = (expenses) => {
-    localStorage.setItem('recurringExpenses', JSON.stringify(expenses));
-    setRecurringExpenses(expenses);
-    checkDueExpenses(expenses);
-  };
-
-  const addRecurringExpense = (expense) => {
-    const newExpense = {
-      ...expense,
-      id: Date.now(),
-      createdAt: new Date().toISOString(),
-      nextDue: calculateNextDue(expense.startDate, expense.recurrence)
-    };
-    const updated = [...recurringExpenses, newExpense];
-    saveRecurringExpenses(updated);
-  };
-
-  const deleteRecurringExpense = (id) => {
-    const updated = recurringExpenses.filter(expense => expense.id !== id);
-    saveRecurringExpenses(updated);
-  };
-
-  // Calcular próxima data de vencimento
-  const calculateNextDue = (startDate, recurrence) => {
-    const start = new Date(startDate);
-    const today = new Date();
-    let nextDue = new Date(start);
-
-    while (nextDue <= today) {
-      switch (recurrence) {
-        case 'mensal':
-          nextDue.setMonth(nextDue.getMonth() + 1);
-          break;
-        case 'bimestral':
-          nextDue.setMonth(nextDue.getMonth() + 2);
-          break;
-        case 'trimestral':
-          nextDue.setMonth(nextDue.getMonth() + 3);
-          break;
-        case 'semestral':
-          nextDue.setMonth(nextDue.getMonth() + 6);
-          break;
-        case 'anual':
-          nextDue.setFullYear(nextDue.getFullYear() + 1);
-          break;
-        case 'quinto-dia-util':
-          nextDue = calculateFifthBusinessDay(nextDue);
-          break;
-        default:
-          nextDue.setMonth(nextDue.getMonth() + 1);
-      }
-    }
-    return nextDue.toISOString().split('T')[0];
-  };
-
-  // Calcular quinto dia útil do mês
-  const calculateFifthBusinessDay = (date) => {
-    const year = date.getFullYear();
-    const month = date.getMonth();
-    let businessDays = 0;
-    let day = 1;
-    
-    while (businessDays < 5) {
-      const currentDate = new Date(year, month, day);
-      const dayOfWeek = currentDate.getDay();
-      
-      // Se não for sábado (6) nem domingo (0)
-      if (dayOfWeek !== 0 && dayOfWeek !== 6) {
-        businessDays++;
-      }
-      
-      if (businessDays < 5) {
-        day++;
-      }
-    }
-    
-    let nextMonth = new Date(year, month + 1, day);
-    return nextMonth;
-  };
-
-  // Verificar despesas vencendo
-  const checkDueExpenses = (expenses) => {
-    const today = new Date();
-    const alerts = [];
-
-    expenses.forEach(expense => {
-      const dueDate = new Date(expense.nextDue);
-      const diffTime = dueDate - today;
-      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-      if (diffDays <= 7 && diffDays >= 0) {
-        alerts.push({
-          ...expense,
-          daysUntilDue: diffDays
-        });
-      } else if (diffDays < 0) {
-        alerts.push({
-          ...expense,
-          daysUntilDue: diffDays,
-          overdue: true
-        });
-      }
-    });
-
-    setDueAlerts(alerts);
-  };
-
-  useEffect(() => {
-    if (isAuthenticated) {
-      fetchRecurringExpenses();
-    }
-  }, [isAuthenticated]);
-
   // Se não estiver autenticado, mostrar tela de login
   if (!isAuthenticated) {
     return <Login onLogin={handleLogin} />;
@@ -263,12 +138,6 @@ function App() {
           >
             📋 Histórico
           </button>
-          <button 
-            className={activeTab === 'recorrentes' ? 'active' : ''} 
-            onClick={() => setActiveTab('recorrentes')}
-          >
-            🔄 Recorrentes
-          </button>
         </nav>
       </header>
 
@@ -276,10 +145,7 @@ function App() {
         {loading && <div className="loading">Carregando...</div>}
         
         {activeTab === 'dashboard' && (
-          <Dashboard 
-            transactions={transactions} 
-            dueAlerts={dueAlerts}
-          />
+          <Dashboard transactions={transactions} />
         )}
         
         {activeTab === 'entradas' && (
@@ -306,14 +172,6 @@ function App() {
           <Historico 
             transactions={transactions} 
             onDelete={deleteTransaction}
-          />
-        )}
-        
-        {activeTab === 'recorrentes' && (
-          <DespesasRecorrentes 
-            expenses={recurringExpenses}
-            onAdd={addRecurringExpense}
-            onDelete={deleteRecurringExpense}
           />
         )}
         
@@ -555,7 +413,7 @@ function GerenciarUsuarios() {
 }
 
 // Dashboard com resumo financeiro
-function Dashboard({ transactions, dueAlerts }) {
+function Dashboard({ transactions }) {
   const currentMonth = new Date().toISOString().slice(0, 7);
   
   const monthlyTransactions = transactions.filter(t => 
@@ -593,27 +451,6 @@ function Dashboard({ transactions, dueAlerts }) {
         </div>
       </div>
 
-      {/* Alertas de Vencimento */}
-      {dueAlerts.length > 0 && (
-        <div className="due-alerts">
-          <h3>⚠️ Alertas de Vencimento</h3>
-          {dueAlerts.map(alert => (
-            <div key={alert.id} className={`alert-item ${alert.status}`}>
-              <div className="alert-info">
-                <span className="alert-description">{alert.description}</span>
-                <span className="alert-value">R$ {parseFloat(alert.value).toFixed(2)}</span>
-              </div>
-              <div className="alert-date">
-                <span className={`alert-status ${alert.status}`}>
-                  {alert.status === 'overdue' ? '🔴 Vencida' : '🟡 Vence em breve'}
-                </span>
-                <span className="alert-due-date">{alert.dueDate}</span>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
       <div className="recent-transactions">
         <h3>Últimas Transações</h3>
         {transactions.slice(-5).reverse().map(transaction => (
@@ -622,138 +459,6 @@ function Dashboard({ transactions, dueAlerts }) {
             <span>{transaction.type === 'entrada' ? '+' : '-'}R$ {parseFloat(transaction.value).toFixed(2)}</span>
           </div>
         ))}
-      </div>
-    </div>
-  );
-}
-
-// Componente de Despesas Recorrentes
-function DespesasRecorrentes({ expenses, onAdd, onDelete }) {
-  const [form, setForm] = useState({
-    description: '',
-    value: '',
-    category: '',
-    recurrence: 'monthly',
-    startDate: new Date().toISOString().slice(0, 10)
-  });
-
-  const recurrenceOptions = [
-    { value: 'monthly', label: 'Mensal' },
-    { value: 'bimonthly', label: 'Bimestral' },
-    { value: 'quarterly', label: 'Trimestral' },
-    { value: 'semiannual', label: 'Semestral' },
-    { value: 'annual', label: 'Anual' },
-    { value: 'fifth-business-day', label: 'Quinto Dia Útil' }
-  ];
-
-  const categorias = ['Alimentação', 'Transporte', 'Moradia', 'Saúde', 'Lazer', 'Outros'];
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    if (form.description && form.value && form.category) {
-      onAdd({
-        ...form,
-        value: parseFloat(form.value),
-        id: Date.now(),
-        created: new Date().toISOString()
-      });
-      setForm({
-        description: '',
-        value: '',
-        category: '',
-        recurrence: 'monthly',
-        startDate: new Date().toISOString().slice(0, 10)
-      });
-    }
-  };
-
-  const formatRecurrence = (recurrence) => {
-    const option = recurrenceOptions.find(opt => opt.value === recurrence);
-    return option ? option.label : recurrence;
-  };
-
-  return (
-    <div className="recurring-expenses">
-      <h2>🔄 Despesas Recorrentes</h2>
-      
-      <form onSubmit={handleSubmit} className="recurring-form">
-        <div className="form-grid">
-          <input
-            type="text"
-            placeholder="Descrição"
-            value={form.description}
-            onChange={(e) => setForm({...form, description: e.target.value})}
-            required
-          />
-          
-          <input
-            type="number"
-            step="0.01"
-            placeholder="Valor"
-            value={form.value}
-            onChange={(e) => setForm({...form, value: e.target.value})}
-            required
-          />
-          
-          <select
-            value={form.category}
-            onChange={(e) => setForm({...form, category: e.target.value})}
-            required
-          >
-            <option value="">Categoria</option>
-            {categorias.map(cat => (
-              <option key={cat} value={cat}>{cat}</option>
-            ))}
-          </select>
-          
-          <select
-            value={form.recurrence}
-            onChange={(e) => setForm({...form, recurrence: e.target.value})}
-            required
-          >
-            {recurrenceOptions.map(option => (
-              <option key={option.value} value={option.value}>{option.label}</option>
-            ))}
-          </select>
-          
-          <input
-            type="date"
-            value={form.startDate}
-            onChange={(e) => setForm({...form, startDate: e.target.value})}
-            required
-          />
-          
-          <button type="submit">Adicionar Recorrente</button>
-        </div>
-      </form>
-
-      <div className="recurring-list">
-        <h3>Despesas Cadastradas</h3>
-        {expenses.length === 0 ? (
-          <p className="empty-message">Nenhuma despesa recorrente cadastrada</p>
-        ) : (
-          expenses.map(expense => (
-            <div key={expense.id} className="recurring-item">
-              <div className="recurring-info">
-                <h4>{expense.description}</h4>
-                <p className="recurring-details">
-                  <span className="category">{expense.category}</span>
-                  <span className="recurrence">{formatRecurrence(expense.recurrence)}</span>
-                </p>
-              </div>
-              <div className="recurring-actions">
-                <span className="recurring-value">R$ {parseFloat(expense.value).toFixed(2)}</span>
-                <button
-                  className="delete-btn"
-                  onClick={() => onDelete(expense.id)}
-                  title="Excluir"
-                >
-                  🗑️
-                </button>
-              </div>
-            </div>
-          ))
-        )}
       </div>
     </div>
   );
