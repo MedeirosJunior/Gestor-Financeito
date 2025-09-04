@@ -1,8 +1,25 @@
 const express = require('express');
 const cors = require('cors');
-const sqlite3 = require('sqlite3').verbose();
-const path = require('path');
-const app = express();
+const { Pool } = require('pg');
+const path = require('path');// Rotas para transações
+app.get('/transactions', async (req, res) => {
+  const { userId } = req.query;
+  
+  if (!userId || userId === 'undefined') {
+    return res.status(400).json({ error: 'userId é obrigatório' });
+  }
+  
+  try {
+    const result = await pool.query(
+      'SELECT * FROM transactions WHERE "userId" = $1 ORDER BY date DESC, created_at DESC', 
+      [userId]
+    );
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Erro ao buscar transações:', error);
+    res.status(500).json({ error: error.message });
+  }
+});();
 const port = process.env.PORT || 3001;
 
 // Configurar CORS para permitir frontend separado
@@ -26,210 +43,108 @@ app.get('/api/health', (req, res) => {
   res.json({ 
     status: 'OK', 
     message: 'Gestor Financeiro API funcionando!',
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
+    database: process.env.DATABASE_URL ? 'PostgreSQL' : 'SQLite (fallback)'
   });
 });
 
-// Criar/conectar ao banco de dados
-const db = new sqlite3.Database('./financeiro.db', (err) => {
-  if (err) {
-    console.error('❌ Erro ao conectar com o banco:', err.message);
-  } else {
-    console.log('✅ Conectado ao banco SQLite');
-  }
+// Configurar conexão com PostgreSQL
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
 });
 
-// Adicionar backup automático e restore
-const fs = require('fs');
-const backupPath = './backup_financeiro.json';
+// Inicializar banco de dados PostgreSQL
+const initializeDatabase = async () => {
+  try {
+    console.log('🔄 Inicializando banco PostgreSQL...');
+    
+    // Criar tabela de usuários
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS users (
+        id SERIAL PRIMARY KEY,
+        email VARCHAR(255) UNIQUE NOT NULL,
+        password VARCHAR(255) NOT NULL,
+        name VARCHAR(255),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    
+    // Criar tabela de transações
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS transactions (
+        id SERIAL PRIMARY KEY,
+        type VARCHAR(50) NOT NULL,
+        description TEXT NOT NULL,
+        category VARCHAR(100) NOT NULL,
+        value DECIMAL(10,2) NOT NULL,
+        date DATE NOT NULL,
+        "userId" VARCHAR(255) NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    
+    // Criar índices para melhor performance
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_transactions_userid ON transactions("userId")`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions(date)`);
+    
+    console.log('✅ Banco PostgreSQL inicializado com sucesso!');
+  } catch (error) {
+    console.error('❌ Erro ao inicializar banco:', error);
+    throw error;
+  }
+};
 
-// Função para fazer backup dos dados
+// Backup automático para PostgreSQL
 const backupData = async () => {
   try {
-    const users = await new Promise((resolve, reject) => {
-      db.all('SELECT * FROM users', (err, rows) => {
-        if (err) reject(err);
-        else resolve(rows);
-      });
-    });
-    
-    const transactions = await new Promise((resolve, reject) => {
-      db.all('SELECT * FROM transactions', (err, rows) => {
-        if (err) reject(err);
-        else resolve(rows);
-      });
-    });
+    const users = await pool.query('SELECT * FROM users');
+    const transactions = await pool.query('SELECT * FROM transactions');
     
     const backup = {
       timestamp: new Date().toISOString(),
-      users: users,
-      transactions: transactions
+      users: users.rows,
+      transactions: transactions.rows
     };
     
-    fs.writeFileSync(backupPath, JSON.stringify(backup, null, 2));
-    console.log('✅ Backup criado:', new Date().toLocaleString());
+    console.log('✅ Backup PostgreSQL criado:', new Date().toLocaleString(), 
+                `- ${backup.users.length} usuários, ${backup.transactions.length} transações`);
   } catch (error) {
-    console.error('❌ Erro no backup:', error);
+    console.error('❌ Erro no backup PostgreSQL:', error);
   }
 };
 
-// Função para restaurar dados do backup
-const restoreData = async () => {
-  try {
-    if (fs.existsSync(backupPath)) {
-      const backup = JSON.parse(fs.readFileSync(backupPath, 'utf8'));
-      console.log('🔄 Restaurando backup de:', backup.timestamp);
-      
-      // Restaurar usuários
-      for (const user of backup.users) {
-        await new Promise((resolve, reject) => {
-          db.run(
-            'INSERT OR REPLACE INTO users (id, name, email, password, role, created_at) VALUES (?, ?, ?, ?, ?, ?)',
-            [user.id, user.name, user.email, user.password, user.role, user.created_at],
-            (err) => err ? reject(err) : resolve()
-          );
-        });
-      }
-      
-      // Restaurar transações
-      for (const transaction of backup.transactions) {
-        await new Promise((resolve, reject) => {
-          db.run(
-            'INSERT OR REPLACE INTO transactions (id, type, description, category, value, date, userId, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-            [transaction.id, transaction.type, transaction.description, transaction.category, transaction.value, transaction.date, transaction.userId, transaction.created_at],
-            (err) => err ? reject(err) : resolve()
-          );
-        });
-      }
-      
-      console.log('✅ Dados restaurados com sucesso!');
-    }
-  } catch (error) {
-    console.error('❌ Erro na restauração:', error);
-  }
-};
-
-// Criar e migrar tabelas
-db.serialize(() => {
-  // Verificar se a tabela users existe e tem a coluna role
-  db.all("PRAGMA table_info(users)", (err, columns) => {
-    if (err) {
-      console.error('Erro ao verificar tabela users:', err);
-      return;
-    }
-    
-    const hasRoleColumn = columns.some(col => col.name === 'role');
-    
-    if (columns.length === 0) {
-      // Tabela não existe, criar nova
-      db.run(`CREATE TABLE users (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT NOT NULL,
-        email TEXT UNIQUE NOT NULL,
-        password TEXT NOT NULL,
-        role TEXT DEFAULT 'user',
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      )`, (err) => {
-        if (err) {
-          console.error('Erro ao criar tabela users:', err);
-        } else {
-          console.log('✅ Tabela users criada com sucesso');
-          createAdminUser();
-        }
-      });
-    } else if (!hasRoleColumn) {
-      // Tabela existe mas não tem coluna role, adicionar
-      db.run("ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'user'", (err) => {
-        if (err) {
-          console.error('Erro ao adicionar coluna role:', err);
-        } else {
-          console.log('✅ Coluna role adicionada à tabela users');
-          createAdminUser();
-        }
-      });
-    } else {
-      console.log('✅ Tabela users já existe e está atualizada');
-      createAdminUser();
-    }
-  });
-
-  // Verificar se a tabela transactions existe e tem a coluna userId
-  db.all("PRAGMA table_info(transactions)", (err, columns) => {
-    if (err) {
-      console.error('Erro ao verificar tabela transactions:', err);
-      return;
-    }
-    
-    const hasUserIdColumn = columns.some(col => col.name === 'userId');
-    
-    if (columns.length === 0) {
-      // Tabela não existe, criar nova
-      db.run(`CREATE TABLE transactions (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        type TEXT NOT NULL,
-        description TEXT NOT NULL,
-        category TEXT NOT NULL,
-        value REAL NOT NULL,
-        date TEXT NOT NULL,
-        userId INTEGER NOT NULL,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (userId) REFERENCES users (id)
-      )`, (err) => {
-        if (err) {
-          console.error('Erro ao criar tabela transactions:', err);
-        } else {
-          console.log('✅ Tabela transactions criada com sucesso');
-        }
-      });
-    } else if (!hasUserIdColumn) {
-      // Tabela existe mas não tem coluna userId, adicionar
-      db.run("ALTER TABLE transactions ADD COLUMN userId INTEGER DEFAULT 1", (err) => {
-        if (err) {
-          console.error('Erro ao adicionar coluna userId:', err);
-        } else {
-          console.log('✅ Coluna userId adicionada à tabela transactions');
-        }
-      });
-    } else {
-      console.log('✅ Tabela transactions já existe e está atualizada');
-    }
-  });
-  
-  // Restaurar dados do backup após criar/verificar tabelas
-  setTimeout(() => {
-    restoreData().then(() => {
-      console.log('🔄 Verificação de backup concluída');
-    });
-  }, 1000);
+// Inicializar banco de dados
+initializeDatabase().catch(error => {
+  console.error('❌ Falha crítica na inicialização do banco:', error);
+  process.exit(1);
 });
 
+
+
 // Função para criar usuário admin
-function createAdminUser() {
-  db.get('SELECT id FROM users WHERE email = ?', ['admin@gestor.com'], (err, row) => {
-    if (err) {
-      console.error('Erro ao verificar admin:', err);
-      return;
-    }
+async function createAdminUser() {
+  try {
+    const result = await pool.query('SELECT id FROM users WHERE email = $1', ['admin@gestor.com']);
     
-    if (!row) {
-      db.run(
-        'INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)',
-        ['Administrador', 'admin@gestor.com', 'j92953793*/*', 'admin'],
-        function(err) {
-          if (err) {
-            console.error('Erro ao criar admin:', err);
-          } else {
-            console.log('👑 Usuário admin criado com sucesso!');
-            console.log('📧 Email: admin@gestor.com');
-            console.log('🔑 Senha: j92953793*/*');
-          }
-        }
+    if (result.rows.length === 0) {
+      await pool.query(
+        'INSERT INTO users (name, email, password) VALUES ($1, $2, $3)',
+        ['Administrador', 'admin@gestor.com', 'j92953793*/*']
       );
+      console.log('👑 Usuário admin criado com sucesso!');
+      console.log('📧 Email: admin@gestor.com');
+      console.log('🔑 Senha: j92953793*/*');
     } else {
       console.log('👑 Usuário admin já existe');
     }
-  });
+  } catch (error) {
+    console.error('Erro ao verificar/criar admin:', error);
+  }
 }
+
+// Criar usuário admin após inicialização
+setTimeout(() => createAdminUser(), 2000);
 
 // Rotas para transações
 app.get('/transactions', (req, res) => {
@@ -252,34 +167,33 @@ app.get('/transactions', (req, res) => {
   );
 });
 
-app.post('/transactions', (req, res) => {
+app.post('/transactions', async (req, res) => {
   const { type, description, category, value, date, userId } = req.body;
   
   if (!type || !description || !category || !value || !date || !userId) {
     return res.status(400).json({ error: 'Todos os campos são obrigatórios' });
   }
   
-  db.run(
-    'INSERT INTO transactions (type, description, category, value, date, userId) VALUES (?, ?, ?, ?, ?, ?)',
-    [type, description, category, value, date, userId], 
-    function(err) {
-      if (err) {
-        console.error(err);
-        return res.status(500).json({ error: err.message });
-      }
-      
-      // Fazer backup após inserção
-      setTimeout(() => backupData(), 100);
-      
-      res.json({ 
-        id: this.lastID,
-        message: 'Transação criada com sucesso'
-      });
-    }
-  );
+  try {
+    const result = await pool.query(
+      'INSERT INTO transactions (type, description, category, value, date, "userId") VALUES ($1, $2, $3, $4, $5, $6) RETURNING id',
+      [type, description, category, value, date, userId]
+    );
+    
+    // Fazer backup após inserção
+    setTimeout(() => backupData(), 100);
+    
+    res.json({ 
+      id: result.rows[0].id,
+      message: 'Transação criada com sucesso'
+    });
+  } catch (error) {
+    console.error('Erro ao criar transação:', error);
+    res.status(500).json({ error: error.message });
+  }
 });
 
-app.delete('/transactions/:id', (req, res) => {
+app.delete('/transactions/:id', async (req, res) => {
   const { id } = req.params;
   const { userId } = req.query;
   
@@ -287,45 +201,40 @@ app.delete('/transactions/:id', (req, res) => {
     return res.status(400).json({ error: 'ID do usuário é obrigatório' });
   }
   
-  // Verificar se a transação pertence ao usuário
-  db.get(
-    'SELECT userId FROM transactions WHERE id = ?', 
-    [id], 
-    (err, row) => {
-      if (err) {
-        console.error(err);
-        return res.status(500).json({ error: err.message });
-      }
-      
-      if (!row) {
-        return res.status(404).json({ error: 'Transação não encontrada' });
-      }
-      
-      if (row.userId !== parseInt(userId)) {
-        return res.status(403).json({ error: 'Você não tem permissão para deletar esta transação' });
-      }
-      
-      db.run('DELETE FROM transactions WHERE id = ?', [id], function(err) {
-        if (err) {
-          console.error(err);
-          return res.status(500).json({ error: err.message });
-        }
-        
-        if (this.changes === 0) {
-          return res.status(404).json({ error: 'Transação não encontrada' });
-        }
-        
-        // Fazer backup após exclusão
-        setTimeout(() => backupData(), 100);
-        
-        res.json({ message: 'Transação deletada com sucesso' });
-      });
+  try {
+    // Verificar se a transação pertence ao usuário
+    const checkResult = await pool.query(
+      'SELECT "userId" FROM transactions WHERE id = $1', 
+      [id]
+    );
+    
+    if (checkResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Transação não encontrada' });
     }
-  );
+    
+    if (checkResult.rows[0].userId !== userId) {
+      return res.status(403).json({ error: 'Você não tem permissão para deletar esta transação' });
+    }
+    
+    // Deletar a transação
+    const deleteResult = await pool.query('DELETE FROM transactions WHERE id = $1', [id]);
+    
+    if (deleteResult.rowCount === 0) {
+      return res.status(404).json({ error: 'Transação não encontrada' });
+    }
+    
+    // Fazer backup após exclusão
+    setTimeout(() => backupData(), 100);
+    
+    res.json({ message: 'Transação deletada com sucesso' });
+  } catch (error) {
+    console.error('Erro ao deletar transação:', error);
+    res.status(500).json({ error: error.message });
+  }
 });
 
 // Rotas de autenticação
-app.post('/auth/login', (req, res) => {
+app.post('/auth/login', async (req, res) => {
   const { email, password } = req.body;
   
   if (!email || !password) {
@@ -334,37 +243,37 @@ app.post('/auth/login', (req, res) => {
   
   console.log('Tentativa de login:', { email, password }); // Log para debug
   
-  db.get(
-    'SELECT id, name, email, role FROM users WHERE email = ? AND password = ?',
-    [email, password],
-    (err, row) => {
-      if (err) {
-        console.error('Erro no banco:', err);
-        return res.status(500).json({ error: err.message });
-      }
-      
-      console.log('Resultado da consulta:', row); // Log para debug
-      
-      if (!row) {
-        return res.status(401).json({ error: 'Email ou senha inválidos' });
-      }
-      
-      res.json({
-        message: 'Login realizado com sucesso',
-        user: {
-          id: row.id,
-          name: row.name,
-          email: row.email,
-          role: row.role
-        }
-      });
+  try {
+    const result = await pool.query(
+      'SELECT id, name, email FROM users WHERE email = $1 AND password = $2',
+      [email, password]
+    );
+    
+    console.log('Resultado da consulta:', result.rows); // Log para debug
+    
+    if (result.rows.length === 0) {
+      return res.status(401).json({ error: 'Email ou senha inválidos' });
     }
-  );
+    
+    const user = result.rows[0];
+    
+    res.json({
+      message: 'Login realizado com sucesso',
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email
+      }
+    });
+  } catch (error) {
+    console.error('Erro no login:', error);
+    res.status(500).json({ error: error.message });
+  }
 });
 
 // Rotas administrativas
-app.post('/admin/register-user', (req, res) => {
-  const { name, email, password, role = 'user' } = req.body;
+app.post('/admin/register-user', async (req, res) => {
+  const { name, email, password } = req.body;
   
   if (!name || !email || !password) {
     return res.status(400).json({ error: 'Todos os campos são obrigatórios' });
@@ -374,146 +283,116 @@ app.post('/admin/register-user', (req, res) => {
     return res.status(400).json({ error: 'Senha deve ter pelo menos 6 caracteres' });
   }
   
-  // Verificar se email já existe
-  db.get('SELECT id FROM users WHERE email = ?', [email], (err, row) => {
-    if (err) {
-      return res.status(500).json({ error: err.message });
-    }
+  try {
+    // Verificar se email já existe
+    const checkResult = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
     
-    if (row) {
+    if (checkResult.rows.length > 0) {
       return res.status(400).json({ error: 'Email já cadastrado' });
     }
     
     // Criar usuário
-    db.run(
-      'INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)',
-      [name, email, password, role],
-      function(err) {
-        if (err) {
-          return res.status(500).json({ error: err.message });
-        }
-        
-        res.json({ 
-          message: 'Usuário criado com sucesso',
-          userId: this.lastID 
-        });
-      }
+    const result = await pool.query(
+      'INSERT INTO users (name, email, password) VALUES ($1, $2, $3) RETURNING id',
+      [name, email, password]
     );
-  });
+    
+    res.json({ 
+      message: 'Usuário criado com sucesso',
+      userId: result.rows[0].id 
+    });
+  } catch (error) {
+    console.error('Erro ao criar usuário:', error);
+    res.status(500).json({ error: error.message });
+  }
 });
 
-app.get('/admin/users', (req, res) => {
-  db.all('SELECT id, name, email, role, created_at FROM users ORDER BY created_at DESC', (err, rows) => {
-    if (err) {
-      return res.status(500).json({ error: err.message });
-    }
-    res.json(rows);
-  });
+app.get('/admin/users', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT id, name, email, created_at FROM users ORDER BY created_at DESC');
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Erro ao buscar usuários:', error);
+    res.status(500).json({ error: error.message });
+  }
 });
 
-app.delete('/admin/users/:id', (req, res) => {
+app.delete('/admin/users/:id', async (req, res) => {
   const { id } = req.params;
   
-  // Não permitir deletar admin
-  db.get('SELECT role FROM users WHERE id = ?', [id], (err, row) => {
-    if (err) {
-      return res.status(500).json({ error: err.message });
-    }
+  try {
+    // Verificar se usuário existe
+    const checkResult = await pool.query('SELECT id FROM users WHERE id = $1', [id]);
     
-    if (!row) {
+    if (checkResult.rows.length === 0) {
       return res.status(404).json({ error: 'Usuário não encontrado' });
     }
     
-    if (row.role === 'admin') {
-      return res.status(403).json({ error: 'Não é possível deletar administradores' });
-    }
+    // Deletar o usuário
+    await pool.query('DELETE FROM users WHERE id = $1', [id]);
     
-    db.run('DELETE FROM users WHERE id = ?', [id], function(err) {
-      if (err) {
-        return res.status(500).json({ error: err.message });
-      }
-      
-      res.json({ message: 'Usuário deletado com sucesso' });
-    });
-  });
+    res.json({ message: 'Usuário deletado com sucesso' });
+  } catch (error) {
+    console.error('Erro ao deletar usuário:', error);
+    res.status(500).json({ error: error.message });
+  }
 });
 
 // Rota para administradores verem todas as transações
-app.get('/admin/all-transactions', (req, res) => {
-  db.all(
-    `SELECT 
-      t.*,
-      u.name as userName,
-      u.email as userEmail
-    FROM transactions t
-    JOIN users u ON t.userId = u.id
-    ORDER BY t.date DESC, t.created_at DESC`,
-    (err, rows) => {
-      if (err) {
-        console.error(err);
-        return res.status(500).json({ error: err.message });
-      }
-      res.json(rows);
-    }
-  );
+app.get('/admin/all-transactions', async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT 
+        t.*,
+        u.name as userName,
+        u.email as userEmail
+      FROM transactions t
+      JOIN users u ON t."userId" = u.email
+      ORDER BY t.date DESC, t.created_at DESC
+    `);
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Erro ao buscar todas as transações:', error);
+    res.status(500).json({ error: error.message });
+  }
 });
 
 // Rota para estatísticas gerais (admin)
-app.get('/admin/stats', (req, res) => {
-  const queries = [
-    // Total de usuários
-    new Promise((resolve, reject) => {
-      db.get('SELECT COUNT(*) as totalUsers FROM users', (err, row) => {
-        if (err) reject(err);
-        else resolve({ totalUsers: row.totalUsers });
-      });
-    }),
+app.get('/admin/stats', async (req, res) => {
+  try {
+    const [usersResult, transactionsResult, totalsResult] = await Promise.all([
+      pool.query('SELECT COUNT(*) as totalUsers FROM users'),
+      pool.query('SELECT COUNT(*) as totalTransactions FROM transactions'),
+      pool.query('SELECT type, SUM(value) as total FROM transactions GROUP BY type')
+    ]);
     
-    // Total de transações
-    new Promise((resolve, reject) => {
-      db.get('SELECT COUNT(*) as totalTransactions FROM transactions', (err, row) => {
-        if (err) reject(err);
-        else resolve({ totalTransactions: row.totalTransactions });
-      });
-    }),
-    
-    // Total geral de entradas e despesas
-    new Promise((resolve, reject) => {
-      db.all(
-        'SELECT type, SUM(value) as total FROM transactions GROUP BY type',
-        (err, rows) => {
-          if (err) reject(err);
-          else {
-            const totals = {};
-            rows.forEach(row => {
-              totals[row.type] = row.total;
-            });
-            resolve(totals);
-          }
-        }
-      );
-    })
-  ];
-  
-  Promise.all(queries)
-    .then(results => {
-      const stats = Object.assign({}, ...results);
-      res.json(stats);
-    })
-    .catch(err => {
-      console.error(err);
-      res.status(500).json({ error: err.message });
+    const totals = {};
+    totalsResult.rows.forEach(row => {
+      totals[row.type] = parseFloat(row.total);
     });
+    
+    const stats = {
+      totalUsers: parseInt(usersResult.rows[0].totalusers),
+      totalTransactions: parseInt(transactionsResult.rows[0].totaltransactions),
+      ...totals
+    };
+    
+    res.json(stats);
+  } catch (error) {
+    console.error('Erro ao buscar estatísticas:', error);
+    res.status(500).json({ error: error.message });
+  }
 });
 
 // Rota para verificar usuários cadastrados (debug)
-app.get('/debug/users', (req, res) => {
-  db.all('SELECT id, name, email, role FROM users', (err, rows) => {
-    if (err) {
-      return res.status(500).json({ error: err.message });
-    }
-    res.json(rows);
-  });
+app.get('/debug/users', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT id, name, email FROM users');
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Erro ao buscar usuários:', error);
+    res.status(500).json({ error: error.message });
+  }
 });
 
 app.listen(port, () => {
