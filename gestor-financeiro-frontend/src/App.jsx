@@ -287,6 +287,8 @@ function App() {
   const [loadingAuth, setLoadingAuth] = useState(false);
   const [recurringExpenses, setRecurringExpenses] = useState([]);
   const [dueAlerts, setDueAlerts] = useState([]);
+  // Estado para modo escuro
+  const [darkMode, setDarkMode] = useState(false);
   
   // Estado para conectividade da API
   const [isApiAvailable, setIsApiAvailable] = useState(false);
@@ -387,251 +389,122 @@ function App() {
     return () => clearInterval(interval);
   }, [isApiAvailable]);
 
-  // Carregar categorias personalizadas na inicialização
+  // Carregar categorias personalizadas
   useEffect(() => {
-    if (isAuthenticated) {
-      const loadedCategories = CategoryManager.loadCategories();
-      const customCats = CategoryManager.getCustomCategories();
-      setCategories(loadedCategories);
-      setCustomCategories(customCats);
-    }
-  }, [isAuthenticated]);
+    const loadedCategories = CategoryManager.loadCategories();
+    const customCats = CategoryManager.getCustomCategories();
+    setCategories(loadedCategories);
+    setCustomCategories(customCats);
+  }, []);
 
-  // Funções CRUD para categorias personalizadas
+  // Funções para categorias personalizadas
   const addCustomCategory = useCallback((type, categoryData) => {
-    // Validar dados da categoria
     const validation = CategoryManager.validateCategory(categoryData);
     if (!validation.valid) {
       toast.error(validation.error);
       return false;
     }
 
-    // Verificar se já existe
     if (CategoryManager.categoryExists(categoryData.name, type)) {
-      toast.error('Já existe uma categoria com esse nome!');
+      toast.error('Já existe uma categoria com este nome!');
       return false;
     }
 
-    try {
-      // Criar nova categoria
-      const newCategory = {
-        id: CategoryManager.generateId(),
-        name: ValidationUtils.sanitizeText(categoryData.name),
-        icon: categoryData.icon,
-        color: categoryData.color,
-        custom: true,
-        createdAt: new Date().toISOString()
-      };
+    const newCategory = {
+      ...categoryData,
+      id: CategoryManager.generateId(),
+      custom: true
+    };
 
-      // Atualizar estado local
-      const updatedCustomCategories = {
-        ...customCategories,
-        [type]: [...customCategories[type], newCategory]
-      };
+    const updatedCustomCategories = {
+      ...customCategories,
+      [type]: [...customCategories[type], newCategory]
+    };
 
-      const updatedAllCategories = {
+    if (CategoryManager.saveCustomCategories(updatedCustomCategories)) {
+      setCustomCategories(updatedCustomCategories);
+      const updatedCategories = {
         ...categories,
         [type]: [...categories[type], newCategory]
       };
-
-      // Salvar no localStorage
-      if (CategoryManager.saveCustomCategories(updatedCustomCategories)) {
-        setCustomCategories(updatedCustomCategories);
-        setCategories(updatedAllCategories);
-        toast.success(`Categoria "${newCategory.name}" criada com sucesso!`);
-        return true;
-      }
-      return false;
-    } catch (error) {
-      ErrorHandler.handleStorageError(error, 'adicionar categoria');
-      return false;
+      setCategories(updatedCategories);
+      toast.success('Categoria criada com sucesso!');
+      return true;
     }
-  }, [customCategories, categories]);
+    return false;
+  }, [categories, customCategories]);
 
-  const updateCustomCategory = useCallback((type, categoryId, updatedData) => {
-    // Validar dados da categoria
-    const validation = CategoryManager.validateCategory(updatedData);
+  const updateCustomCategory = useCallback((type, categoryId, categoryData) => {
+    const validation = CategoryManager.validateCategory(categoryData);
     if (!validation.valid) {
       toast.error(validation.error);
       return false;
     }
 
-    // Verificar se nome já existe (excluindo a categoria atual)
-    if (CategoryManager.categoryExists(updatedData.name, type, categoryId)) {
-      toast.error('Já existe uma categoria com esse nome!');
+    if (CategoryManager.categoryExists(categoryData.name, type, categoryId)) {
+      toast.error('Já existe uma categoria com este nome!');
       return false;
     }
 
-    try {
-      // Atualizar categoria personalizada
-      const updatedCustomCategories = {
-        ...customCategories,
-        [type]: customCategories[type].map(cat => 
-          cat.id === categoryId 
-            ? {
-                ...cat,
-                name: ValidationUtils.sanitizeText(updatedData.name),
-                icon: updatedData.icon,
-                color: updatedData.color,
-                updatedAt: new Date().toISOString()
-              }
-            : cat
-        )
-      };
+    const updatedCustomCategories = {
+      ...customCategories,
+      [type]: customCategories[type].map(cat => 
+        cat.id === categoryId ? { ...categoryData, id: categoryId, custom: true } : cat
+      )
+    };
 
-      const updatedAllCategories = {
-        ...categories,
-        [type]: categories[type].map(cat => 
-          cat.id === categoryId 
-            ? {
-                ...cat,
-                name: ValidationUtils.sanitizeText(updatedData.name),
-                icon: updatedData.icon,
-                color: updatedData.color,
-                updatedAt: new Date().toISOString()
-              }
-            : cat
-        )
-      };
-
-      // Salvar no localStorage
-      if (CategoryManager.saveCustomCategories(updatedCustomCategories)) {
-        setCustomCategories(updatedCustomCategories);
-        setCategories(updatedAllCategories);
-        toast.success('Categoria atualizada com sucesso!');
-        return true;
-      }
-      return false;
-    } catch (error) {
-      ErrorHandler.handleStorageError(error, 'atualizar categoria');
-      return false;
+    if (CategoryManager.saveCustomCategories(updatedCustomCategories)) {
+      setCustomCategories(updatedCustomCategories);
+      const updatedCategories = CategoryManager.loadCategories();
+      setCategories(updatedCategories);
+      toast.success('Categoria atualizada com sucesso!');
+      return true;
     }
-  }, [customCategories, categories]);
+    return false;
+  }, [customCategories]);
 
   const deleteCustomCategory = useCallback((type, categoryId) => {
-    try {
-      // Verificar se categoria é padrão (não pode ser deletada)
-      const isDefault = CategoryManager.defaultCategories[type].some(cat => cat.id === categoryId);
-      if (isDefault) {
-        toast.error('Não é possível excluir categorias padrão do sistema!');
-        return false;
-      }
+    const updatedCustomCategories = {
+      ...customCategories,
+      [type]: customCategories[type].filter(cat => cat.id !== categoryId)
+    };
 
-      // Verificar se categoria está em uso
-      const categoryInUse = transactions.some(t => t.category === categoryId);
-      if (categoryInUse) {
-        toast.error('Não é possível excluir categoria que está sendo usada em transações!');
-        return false;
-      }
-
-      // Remover categoria
-      const updatedCustomCategories = {
-        ...customCategories,
-        [type]: customCategories[type].filter(cat => cat.id !== categoryId)
-      };
-
-      const updatedAllCategories = {
-        ...categories,
-        [type]: categories[type].filter(cat => cat.id !== categoryId)
-      };
-
-      // Salvar no localStorage
-      if (CategoryManager.saveCustomCategories(updatedCustomCategories)) {
-        setCustomCategories(updatedCustomCategories);
-        setCategories(updatedAllCategories);
-        toast.success('Categoria excluída com sucesso!');
-        return true;
-      }
-      return false;
-    } catch (error) {
-      ErrorHandler.handleStorageError(error, 'excluir categoria');
-      return false;
+    if (CategoryManager.saveCustomCategories(updatedCustomCategories)) {
+      setCustomCategories(updatedCustomCategories);
+      const updatedCategories = CategoryManager.loadCategories();
+      setCategories(updatedCategories);
+      toast.success('Categoria excluída com sucesso!');
+      return true;
     }
-  }, [customCategories, categories, transactions]);
+    return false;
+  }, [customCategories]);
 
-  // Otimizar fetchTransactions com useCallback
+  // All hooks must be called before any conditional returns
   const fetchTransactions = useCallback(async () => {
-    console.log('=== CARREGANDO TRANSAÇÕES ===');
-    console.log('API disponível:', isApiAvailable);
-    console.log('API checada:', apiChecked);
-    console.log('CurrentUser objeto completo:', currentUser);
-    console.log('CurrentUser email:', currentUser?.email);
-    console.log('CurrentUser name:', currentUser?.name);
-    console.log('Usuário autenticado:', isAuthenticated);
-    
-    // Se API não está disponível, não carregar nada
-    if (!isApiAvailable || !apiChecked) {
-      console.log('❌ API indisponível - não é possível carregar transações');
-      if (apiChecked) {
-        toast.error('Conexão com servidor necessária para carregar dados.');
-      }
-      return;
-    }
-
-    if (!currentUser?.email) {
-      console.log('❌ Usuário não logado - currentUser:', currentUser);
-      console.log('❌ localStorage dados:', {
-        isAuthenticated: localStorage.getItem('isAuthenticated'),
-        currentUser: localStorage.getItem('currentUser'),
-        authTimestamp: localStorage.getItem('authTimestamp')
-      });
-      
-      // Se está autenticado mas currentUser está vazio, recarregar dos dados do localStorage
-      if (isAuthenticated) {
-        console.log('🔄 Tentando recarregar dados do usuário do localStorage...');
-        const userData = localStorage.getItem('currentUser');
-        if (userData) {
-          try {
-            const user = JSON.parse(userData);
-            console.log('🔄 Dados encontrados no localStorage:', user);
-            setCurrentUser(user);
-            return; // Sair para que o useEffect execute novamente
-          } catch (error) {
-            console.error('❌ Erro ao fazer parse dos dados do localStorage:', error);
-          }
-        }
-      }
-      return;
-    }
-
-    setLoading(true);
     try {
       console.log('📡 Fazendo requisição para:', `${config.API_URL}/transactions?userId=${encodeURIComponent(currentUser.email)}`);
-      
       const response = await fetch(`${config.API_URL}/transactions?userId=${encodeURIComponent(currentUser.email)}`);
-      
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
-      
       const data = await response.json();
       console.log('📥 Dados recebidos:', data);
-      
       if (!Array.isArray(data)) {
         throw new Error('Formato de dados inválido recebido do servidor');
       }
-      
       setTransactions(data);
       console.log('✅ Transações carregadas com sucesso:', data.length, 'itens');
     } catch (error) {
       console.error('❌ Erro ao buscar transações da API:', error);
-      setIsApiAvailable(false); // Marcar API como indisponível
+      setIsApiAvailable(false);
       ErrorHandler.handleApiError(error, 'buscar transações');
-      setTransactions([]); // Limpar transações em caso de erro
+      setTransactions([]);
     } finally {
       setLoading(false);
     }
   }, [currentUser, isApiAvailable, apiChecked, isAuthenticated, setCurrentUser]);
 
-  useEffect(() => {
-    if (isAuthenticated) {
-      fetchTransactions();
-    }
-  }, [isAuthenticated, fetchTransactions]);
-
-  // Otimizar addTransaction com useCallback
   const addTransaction = useCallback(async (transaction) => {
-    // Validação antes de enviar
     if (!ValidationUtils.isValidDescription(transaction.description)) {
       toast.error('Descrição deve ter entre 1 e 100 caracteres!');
       return;
@@ -652,7 +525,6 @@ function App() {
       return;
     }
 
-    // Usar categorias dinâmicas para validação
     const validCategoryIds = categories[transaction.type]?.map(cat => cat.id) || [];
     
     if (!validCategoryIds.includes(transaction.category)) {
@@ -662,7 +534,6 @@ function App() {
 
     setLoadingTransactions(true);
     try {
-      // Verificar se API está disponível - OBRIGATÓRIO para operações
       if (!isApiAvailable) {
         toast.error('Conexão com servidor necessária para adicionar transações. Verifique sua internet.');
         return;
@@ -673,7 +544,6 @@ function App() {
         return;
       }
 
-      // Sanitizar dados antes de enviar
       const sanitizedTransaction = {
         ...transaction,
         description: ValidationUtils.sanitizeText(transaction.description),
@@ -692,26 +562,23 @@ function App() {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
 
-      fetchTransactions();
+      await fetchTransactions();
       toast.success(`${transaction.type === 'entrada' ? 'Receita' : 'Despesa'} adicionada com sucesso!`);
     } catch (error) {
       console.error('Erro ao adicionar transação via API:', error);
-      setIsApiAvailable(false); // Marcar API como indisponível
+      setIsApiAvailable(false);
       ErrorHandler.handleApiError(error, 'adicionar transação');
     } finally {
       setLoadingTransactions(false);
     }
   }, [fetchTransactions, categories, isApiAvailable, currentUser]);
 
-  // Otimizar deleteTransaction com useCallback
   const deleteTransaction = useCallback(async (id) => {
-    // Validação do ID antes de excluir
     if (!ValidationUtils.isValidPositiveNumber(id)) {
       toast.error('ID de transação inválido!');
       return;
     }
 
-    // Verificar se API está disponível - OBRIGATÓRIO para operações
     if (!isApiAvailable) {
       toast.error('Conexão com servidor necessária para excluir transações. Verifique sua internet.');
       return;
@@ -736,7 +603,7 @@ function App() {
           return;
         } else if (response.status === 404) {
           toast.error('Transação não encontrada. Ela pode já ter sido excluída.');
-          fetchTransactions(); // Atualizar lista para refletir estado atual
+          fetchTransactions();
           return;
         }
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -750,9 +617,9 @@ function App() {
         toast.error('Acesso negado: você só pode excluir suas próprias transações.');
       } else if (error.message.includes('404')) {
         toast.error('Transação não encontrada.');
-        fetchTransactions(); // Atualizar lista
+        fetchTransactions();
       } else {
-        setIsApiAvailable(false); // Marcar API como indisponível apenas para erros de rede
+        setIsApiAvailable(false);
         ErrorHandler.handleApiError(error, 'excluir transação');
       }
     } finally {
@@ -760,11 +627,9 @@ function App() {
     }
   }, [fetchTransactions, currentUser, isApiAvailable]);
 
-  // Otimizar handleLogin com useCallback
   const handleLogin = useCallback((user) => {
     console.log('🔐 HandleLogin chamado com:', user);
     
-    // Validação dos dados do usuário
     if (!user || !ValidationUtils.isValidCredentials(user.name, user.email)) {
       console.log('❌ Dados de usuário inválidos:', user);
       toast.error('Dados de usuário inválidos!');
@@ -772,7 +637,6 @@ function App() {
     }
 
     try {
-      // Sanitizar dados do usuário
       const sanitizedUser = {
         name: ValidationUtils.sanitizeText(user.name),
         email: user.email.toLowerCase().trim()
@@ -783,7 +647,6 @@ function App() {
       setIsAuthenticated(true);
       setCurrentUser(sanitizedUser);
       
-      // Salvar dados do usuário de forma segura
       localStorage.setItem('isAuthenticated', 'true');
       localStorage.setItem('currentUser', JSON.stringify(sanitizedUser));
       localStorage.setItem('authTimestamp', new Date().getTime().toString());
@@ -800,7 +663,6 @@ function App() {
     }
   }, []);
 
-  // Otimizar handleLogout com useCallback
   const handleLogout = useCallback(() => {
     try {
       setIsAuthenticated(false);
@@ -815,6 +677,23 @@ function App() {
     }
   }, []);
 
+  useEffect(() => {
+    if (isAuthenticated) {
+      fetchTransactions();
+    }
+  }, [isAuthenticated, fetchTransactions]);
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      const saved = localStorage.getItem('recurringExpenses');
+      if (saved) {
+        const expenses = JSON.parse(saved);
+        setRecurringExpenses(expenses);
+        checkDueExpenses(expenses);
+      }
+    }
+  }, [isAuthenticated]);
+
   // Funções para despesas recorrentes
   const saveRecurringExpenses = (expenses) => {
     localStorage.setItem('recurringExpenses', JSON.stringify(expenses));
@@ -823,7 +702,6 @@ function App() {
   };
 
   const addRecurringExpense = (expense) => {
-    // Validação antes de adicionar
     if (!ValidationUtils.isValidDescription(expense.description)) {
       toast.error('Descrição deve ter entre 1 e 100 caracteres!');
       return;
@@ -853,7 +731,6 @@ function App() {
 
     setLoadingRecurring(true);
     try {
-      // Sanitizar dados antes de salvar
       const newExpense = {
         id: Date.now(),
         description: ValidationUtils.sanitizeText(expense.description),
@@ -876,7 +753,6 @@ function App() {
   };
 
   const deleteRecurringExpense = (id) => {
-    // Validação do ID antes de excluir
     if (!ValidationUtils.isValidPositiveNumber(id)) {
       toast.error('ID de despesa inválido!');
       return;
@@ -894,7 +770,6 @@ function App() {
     }
   };
 
-  // Calcular próxima data de vencimento
   const calculateNextDue = (startDate, recurrence) => {
     const start = new Date(startDate);
     const today = new Date();
@@ -927,7 +802,6 @@ function App() {
     return nextDue.toISOString().split('T')[0];
   };
 
-  // Calcular quinto dia útil do mês
   const calculateFifthBusinessDay = (date) => {
     const year = date.getFullYear();
     const month = date.getMonth();
@@ -938,7 +812,6 @@ function App() {
       const currentDate = new Date(year, month, day);
       const dayOfWeek = currentDate.getDay();
       
-      // Se não for sábado (6) nem domingo (0)
       if (dayOfWeek !== 0 && dayOfWeek !== 6) {
         businessDays++;
       }
@@ -952,7 +825,6 @@ function App() {
     return nextMonth;
   };
 
-  // Verificar despesas vencendo
   const checkDueExpenses = (expenses) => {
     const today = new Date();
     const alerts = [];
@@ -979,182 +851,176 @@ function App() {
     setDueAlerts(alerts);
   };
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => {
-    if (isAuthenticated) {
-      const saved = localStorage.getItem('recurringExpenses');
-      if (saved) {
-        const expenses = JSON.parse(saved);
-        setRecurringExpenses(expenses);
-        checkDueExpenses(expenses);
-      }
-    }
-  }, [isAuthenticated]); // eslint-disable-line react-hooks/exhaustive-deps
-
   // Se não estiver autenticado, mostrar tela de login
   if (!isAuthenticated) {
-    return <Login onLogin={handleLogin} loadingAuth={loadingAuth} setLoadingAuth={setLoadingAuth} />;
+    return (
+      <Login 
+        onLogin={handleLogin} 
+        loadingAuth={loadingAuth}
+        setLoadingAuth={setLoadingAuth}
+      />
+    );
   }
 
   return (
-    <div className="app">
-      <LoadingOverlay 
-        show={loadingTransactions} 
-        message="Processando transação..." 
-      />
-      <LoadingOverlay 
-        show={loadingRecurring} 
-        message="Processando despesa recorrente..." 
-      />
-      
-      <header className="header">
-        <div className="header-top">
-          <h1>💰 Gestor Financeiro</h1>
-          <div className="header-controls">
-            <div className="connectivity-status">
-              {apiChecked && (
-                <span className={`status-indicator ${isApiAvailable ? 'online' : 'offline'}`}>
-                  {isApiAvailable ? '🟢 Online' : '🔴 Offline'}
-                </span>
+    <div className={`app${darkMode ? ' dark-mode' : ''}`}>
+          <LoadingOverlay 
+            show={loadingTransactions} 
+            message="Processando transação..." 
+          />
+          <LoadingOverlay 
+            show={loadingRecurring} 
+            message="Processando despesa recorrente..." 
+          />
+          <header className="header">
+            <div className="header-top">
+              <h1>💰 Gestor Financeiro</h1>
+              <div className="header-controls">
+                <div className="connectivity-status">
+                  {apiChecked && (
+                    <span className={`status-indicator ${isApiAvailable ? 'online' : 'offline'}`}>
+                      {isApiAvailable ? '🟢 Online' : '🔴 Offline'}
+                    </span>
+                  )}
+                </div>
+                <div className="user-info">
+                  <span>👤 {currentUser?.name || currentUser?.username}</span>
+                  <button 
+                    className={activeTab === 'usuarios' ? 'active' : ''} 
+                    onClick={() => setActiveTab('usuarios')}
+                    title="Gerenciar Usuários"
+                  >
+                    👥 Usuários
+                  </button>
+                  <button 
+                    className="logout-btn" 
+                    onClick={handleLogout}
+                    title="Sair"
+                  >
+                    🚪 Sair
+                  </button>
+                  <button 
+                    className="darkmode-btn"
+                    onClick={() => setDarkMode(dm => !dm)}
+                    title={darkMode ? 'Modo Claro' : 'Modo Escuro'}
+                    style={{marginLeft: '10px'}}
+                  >
+                    {darkMode ? '🌙' : '☀️'}
+                  </button>
+                </div>
+              </div>
+            </div>
+            <nav className="nav">
+              <button 
+                className={activeTab === 'dashboard' ? 'active' : ''} 
+                onClick={() => setActiveTab('dashboard')}
+              >
+                📊 Dashboard
+              </button>
+              <button 
+                className={activeTab === 'entradas' ? 'active' : ''} 
+                onClick={() => setActiveTab('entradas')}
+              >
+                💵 Entradas
+              </button>
+              <button 
+                className={activeTab === 'despesas' ? 'active' : ''} 
+                onClick={() => setActiveTab('despesas')}
+              >
+                💸 Despesas
+              </button>
+              <button 
+                className={activeTab === 'relatorios' ? 'active' : ''} 
+                onClick={() => setActiveTab('relatorios')}
+              >
+                📈 Relatórios
+              </button>
+              <button 
+                className={activeTab === 'historico' ? 'active' : ''} 
+                onClick={() => setActiveTab('historico')}
+              >
+                📋 Histórico
+              </button>
+              <button 
+                className={activeTab === 'recorrentes' ? 'active' : ''} 
+                onClick={() => setActiveTab('recorrentes')}
+              >
+                🔄 Recorrentes
+              </button>
+              <button 
+                className={activeTab === 'categorias' ? 'active' : ''} 
+                onClick={() => setActiveTab('categorias')}
+              >
+                🏷️ Categorias
+              </button>
+            </nav>
+          </header>
+          <main className="main">
+            {loading && <div className="loading">Carregando...</div>}
+            <Suspense fallback={<SuspenseLoader message="Carregando aba..." />}>
+              {activeTab === 'dashboard' && (
+                <Dashboard 
+                  transactions={transactions} 
+                  dueAlerts={dueAlerts}
+                />
               )}
-            </div>
-            <div className="user-info">
-              <span>👤 {currentUser?.name || currentUser?.username}</span>
-              <button 
-                className={activeTab === 'usuarios' ? 'active' : ''} 
-                onClick={() => setActiveTab('usuarios')}
-                title="Gerenciar Usuários"
-              >
-                👥 Usuários
-              </button>
-              <button 
-                className="logout-btn" 
-                onClick={handleLogout}
-                title="Sair"
-              >
-                🚪 Sair
-              </button>
-            </div>
-          </div>
-        </div>
-        <nav className="nav">
-          <button 
-            className={activeTab === 'dashboard' ? 'active' : ''} 
-            onClick={() => setActiveTab('dashboard')}
-          >
-            📊 Dashboard
-          </button>
-          <button 
-            className={activeTab === 'entradas' ? 'active' : ''} 
-            onClick={() => setActiveTab('entradas')}
-          >
-            💵 Entradas
-          </button>
-          <button 
-            className={activeTab === 'despesas' ? 'active' : ''} 
-            onClick={() => setActiveTab('despesas')}
-          >
-            💸 Despesas
-          </button>
-          <button 
-            className={activeTab === 'relatorios' ? 'active' : ''} 
-            onClick={() => setActiveTab('relatorios')}
-          >
-            📈 Relatórios
-          </button>
-          <button 
-            className={activeTab === 'historico' ? 'active' : ''} 
-            onClick={() => setActiveTab('historico')}
-          >
-            📋 Histórico
-          </button>
-          <button 
-            className={activeTab === 'recorrentes' ? 'active' : ''} 
-            onClick={() => setActiveTab('recorrentes')}
-          >
-            🔄 Recorrentes
-          </button>
-          <button 
-            className={activeTab === 'categorias' ? 'active' : ''} 
-            onClick={() => setActiveTab('categorias')}
-          >
-            🏷️ Categorias
-          </button>
-        </nav>
-      </header>
+              {activeTab === 'entradas' && (
+                <LancamentoForm 
+                  type="entrada" 
+                  onAdd={addTransaction}
+                  title="💵 Lançar Entrada"
+                  categories={categories}
+                  isApiAvailable={isApiAvailable}
+                />
+              )}
+              {activeTab === 'despesas' && (
+                <LancamentoForm 
+                  type="despesa" 
+                  onAdd={addTransaction}
+                  title="💸 Lançar Despesa"
+                  categories={categories}
+                  isApiAvailable={isApiAvailable}
+                />
+              )}
+              {activeTab === 'relatorios' && (
+                <Relatorios 
+                  transactions={transactions} 
+                  loadingExport={loadingExport}
+                  setLoadingExport={setLoadingExport}
+                />
+              )}
+              {activeTab === 'historico' && (
+                  <Historico 
+                    transactions={transactions} 
+                    onDelete={deleteTransaction}
+                    isApiAvailable={isApiAvailable}
+                    categories={categories}
+                  />
+              )}
+              {activeTab === 'recorrentes' && (
+                <DespesasRecorrentes 
+                  expenses={recurringExpenses}
+                  onAdd={addRecurringExpense}
+                  onDelete={deleteRecurringExpense}
+                />
+              )}
+              {activeTab === 'categorias' && (
+                <CategoryManagement 
+                  categories={categories}
+                  onAddCategory={addCustomCategory}
+                  onUpdateCategory={updateCustomCategory}
+                  onDeleteCategory={deleteCustomCategory}
+                />
+              )}
+              {activeTab === 'usuarios' && (
+                <GerenciarUsuarios />
+              )}
+            </Suspense>
+          </main>
 
-      <main className="main">
-        {loading && <div className="loading">Carregando...</div>}
-        
-        <Suspense fallback={<SuspenseLoader message="Carregando aba..." />}>
-          {activeTab === 'dashboard' && (
-            <Dashboard 
-              transactions={transactions} 
-              dueAlerts={dueAlerts}
-            />
-          )}
-          
-          {activeTab === 'entradas' && (
-            <LancamentoForm 
-              type="entrada" 
-              onAdd={addTransaction}
-              title="💵 Lançar Entrada"
-              categories={categories}
-              isApiAvailable={isApiAvailable}
-            />
-          )}
-          
-          {activeTab === 'despesas' && (
-            <LancamentoForm 
-              type="despesa" 
-              onAdd={addTransaction}
-              title="💸 Lançar Despesa"
-              categories={categories}
-              isApiAvailable={isApiAvailable}
-            />
-          )}
-          
-          {activeTab === 'relatorios' && (
-            <Relatorios 
-              transactions={transactions} 
-              loadingExport={loadingExport}
-              setLoadingExport={setLoadingExport}
-            />
-          )}
-          
-          {activeTab === 'historico' && (
-            <Historico 
-              transactions={transactions} 
-              onDelete={deleteTransaction}
-              isApiAvailable={isApiAvailable}
-            />
-          )}
-          
-          {activeTab === 'recorrentes' && (
-            <DespesasRecorrentes 
-              expenses={recurringExpenses}
-              onAdd={addRecurringExpense}
-              onDelete={deleteRecurringExpense}
-            />
-          )}
-          
-          {activeTab === 'categorias' && (
-            <CategoryManagement 
-              categories={categories}
-              onAddCategory={addCustomCategory}
-              onUpdateCategory={updateCustomCategory}
-              onDeleteCategory={deleteCustomCategory}
-            />
-          )}
-          
-          {activeTab === 'usuarios' && (
-            <GerenciarUsuarios />
-          )}
-        </Suspense>
-      </main>
-      <ToastContainer />
-    </div>
-  );
+          <ToastContainer />
+        </div>
+      );
 }
 
 // Componentes de Loading
@@ -1190,7 +1056,7 @@ function ButtonSpinner({ loading, children, onClick, className = '', disabled = 
       )}
     </button>
   );
-}
+ }
 
 function LoadingOverlay({ show, message = 'Carregando...' }) {
   if (!show) return null;
