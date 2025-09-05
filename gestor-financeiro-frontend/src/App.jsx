@@ -668,9 +668,8 @@ function App() {
         return;
       }
 
-      if (!currentUser?.username) {
-    toast.error('Usuário não autenticado. Faça login novamente.');
-    return;
+      if (!currentUser?.email) {
+        toast.error('Usuário não autenticado. Faça login novamente.');
         return;
       }
 
@@ -718,9 +717,8 @@ function App() {
       return;
     }
 
-    if (!currentUser?.username) {
-    toast.error('Usuário não autenticado. Faça login novamente.');
-    return;
+    if (!currentUser?.email) {
+      toast.error('Usuário não autenticado. Faça login novamente.');
       return;
     }
 
