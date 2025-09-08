@@ -502,7 +502,7 @@ function App() {
     } finally {
       setLoading(false);
     }
-  }, [currentUser, isApiAvailable, apiChecked, isAuthenticated, setCurrentUser]);
+  }, [currentUser]);
 
   const addTransaction = useCallback(async (transaction) => {
     if (!ValidationUtils.isValidDescription(transaction.description)) {
