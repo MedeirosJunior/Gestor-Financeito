@@ -8,10 +8,19 @@ const port = process.env.PORT || 10000;
 
 // Determinar caminho do banco de dados
 let dbPath;
-if (process.env.DATABASE_URL) {
-  dbPath = process.env.DATABASE_URL;
+const databaseUrl = process.env.DATABASE_URL;
+
+// Verificar se DATABASE_URL é uma URL de banco de dados (PostgreSQL, MySQL, etc) ou caminho local
+const isExternalDbUrl = databaseUrl && (databaseUrl.startsWith('postgresql://') || databaseUrl.startsWith('postgres://') || databaseUrl.includes('://'));
+
+if (isExternalDbUrl) {
+  // DATABASE_URL contém URL de banco externo, usar SQLite em /tmp
+  dbPath = '/tmp/database.db';
+} else if (databaseUrl) {
+  // DATABASE_URL contém caminho local
+  dbPath = databaseUrl;
 } else if (process.env.NODE_ENV === 'production') {
-  // Em produção, usar /tmp que tem permissão de escrita
+  // Em produção sem DATABASE_URL, usar /tmp
   dbPath = '/tmp/database.db';
 } else {
   // Em desenvolvimento, usar ./data
@@ -28,6 +37,7 @@ console.log(`📂 Banco SQLite será armazenado em: ${dbPath}`);
 const db = new sqlite3.Database(dbPath, (err) => {
   if (err) {
     console.error('❌ Erro ao conectar ao banco de dados:', err);
+    process.exit(1);
   } else {
     console.log('✅ Conectado ao banco SQLite com sucesso!');
   }
