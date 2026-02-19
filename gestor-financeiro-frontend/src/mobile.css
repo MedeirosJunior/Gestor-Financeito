@@ -1,0 +1,223 @@
+/* Mobile Responsive Overrides - Porta Gestor Financeiro */
+
+/* Ensure all inputs and buttons have minimum touch target size */
+button, input[type="button"], input[type="submit"], .submit-btn, .logout-btn, .nav button {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+/* Mejora del espaciado en móvil */
+@media (max-width: 768px) {
+  .app {
+    padding: 12px;
+  }
+  
+  .header {
+    padding: 16px;
+    margin-bottom: 16px;
+    border-radius: 12px;
+  }
+  
+  .header h1 {
+    font-size: 1.4rem;
+    margin-bottom: 12px;
+    word-break: break-word;
+  }
+  
+  .header-content {
+    flex-wrap: wrap;
+  }
+  
+  .main {
+    padding: 16px;
+    border-radius: 12px;
+  }
+  
+  .nav {
+    gap: 4px !important;
+    padding: 6px !important;
+  }
+  
+  .nav button {
+    padding: 10px 12px;
+    font-size: 0.75rem;
+    min-width: 50px;
+  }
+  
+  .cards {
+    grid-template-columns: 1fr !important;
+    gap: 12px !important;
+  }
+  
+  .card {
+    padding: 16px;
+  }
+  
+  .card .value {
+    font-size: 1.5rem;
+  }
+  
+  .lancamento-form {
+    padding: 16px;
+    margin: 0;
+  }
+  
+  .form-group input,
+  .form-group select {
+    padding: 12px;
+    font-size: 16px;
+    min-height: 44px;
+  }
+  
+  .submit-btn {
+    padding: 14px;
+    font-size: 0.95rem;
+  }
+  
+  .transaction-item {
+    grid-template-columns: 1fr !important;
+    padding: 12px;
+    gap: 8px;
+  }
+  
+  .recent-transactions {
+    padding: 16px;
+  }
+  
+  .logout-btn {
+    padding: 10px 14px;
+    font-size: 0.8rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .app {
+    padding: 10px;
+  }
+  
+  .header {
+    padding: 14px;
+    margin-bottom: 12px;
+    border-radius: 10px;
+  }
+  
+  .header h1 {
+    font-size: 1.2rem;
+    margin-bottom: 10px;
+  }
+  
+  .header-content {
+    flex-direction: column;
+    gap: 8px;
+  }
+  
+  .user-info {
+    font-size: 0.85rem;
+  }
+  
+  .logout-btn {
+    width: 100%;
+    padding: 12px;
+    font-size: 0.85rem;
+    min-height: 44px;
+  }
+  
+  .main {
+    padding: 12px;
+    border-radius: 10px;
+  }
+  
+  .nav button {
+    padding: 8px 10px;
+    font-size: 0.7rem;
+    min-width: 40px;
+  }
+  
+  .card .value {
+    font-size: 1.3rem;
+  }
+  
+  .submit-btn {
+    padding: 13px;
+    font-size: 0.9rem;
+  }
+  
+  .lancamento-form h2 {
+    font-size: 1.1rem;
+  }
+  
+  .login-card {
+    padding: 20px;
+    margin: 10px;
+  }
+  
+  .form-group input,
+  .form-group select {
+    font-size: 16px;
+  }
+}
+
+@media (max-width: 360px) {
+  .app {
+    padding: 8px;
+  }
+  
+  .header {
+    padding: 12px;
+    margin-bottom: 10px;
+  }
+  
+  .header h1 {
+    font-size: 1.1rem;
+  }
+  
+  .main {
+    padding: 10px;
+    min-height: 250px;
+  }
+  
+  .nav button {
+    padding: 6px 8px;
+    font-size: 0.65rem;
+    min-width: 35px;
+  }
+  
+  .card {
+    padding: 12px;
+  }
+  
+  .card .value {
+    font-size: 1.1rem;
+  }
+  
+  button {
+    font-size: 0.85rem;
+  }
+}
+
+/* Melhorar experiência geral de touch */
+@media (hover: none) {
+  button:active,
+  .nav button:active {
+    transform: scale(0.98);
+  }
+}
+
+/* Adicionar margin bottom em formulários mobile */
+@media (max-width: 768px) {
+  form {
+    margin-bottom: 16px;
+  }
+}
+
+/* Ajustar botões de exportação */
+@media (max-width: 768px) {
+  .export-buttons {
+    flex-direction: column;
+    gap: 10px;
+  }
+  
+  .export-btn {
+    width: 100%;
+  }
+}

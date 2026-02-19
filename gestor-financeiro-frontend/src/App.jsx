@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo, Suspense } from 'react';
 import './App.css';
+import './mobile.css';
 import config from './config';
 import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
