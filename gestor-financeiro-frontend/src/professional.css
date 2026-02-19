@@ -162,22 +162,23 @@ body {
     background: var(--color-bg-primary);
     border-bottom: 2px solid var(--color-border);
     border-radius: 0;
-    padding: 24px 32px;
+    padding: 0;
     margin-bottom: 32px;
     box-shadow: none;
 }
 
 .header-top {
-    margin-bottom: 28px;
+    padding: 20px 32px;
+    margin-bottom: 0;
     display: flex;
     justify-content: space-between;
-    align-items: flex-start;
-    gap: 40px;
-    flex-wrap: wrap;
+    align-items: center;
+    gap: 32px;
+    border-bottom: 1px solid var(--color-border);
 }
 
 .header-top h1 {
-    font-size: 2rem;
+    font-size: 1.75rem;
     font-weight: 900;
     letter-spacing: -0.03em;
     color: var(--color-text-primary);
@@ -188,29 +189,28 @@ body {
 /* Header Controls - Contém status e user-info */
 .header-controls {
     display: flex;
-    justify-content: flex-end;
+    justify-content: space-between;
     align-items: center;
-    gap: 28px;
+    gap: 32px;
     flex: 1;
-    min-width: 400px;
 }
 
 .connectivity-status {
     display: flex;
     align-items: center;
     gap: 8px;
-    order: 2;
+    margin-left: auto;
 }
 
 .status-indicator {
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 10px 18px;
+    padding: 10px 16px;
     background: rgba(16, 185, 129, 0.08);
     border: 2px solid var(--color-success);
     border-radius: 8px;
-    font-size: 0.9rem;
+    font-size: 0.85rem;
     font-weight: 700;
     color: var(--color-success);
     letter-spacing: 0.02em;
@@ -226,38 +226,36 @@ body {
 .user-info {
     display: flex;
     align-items: center;
-    gap: 14px;
-    order: 3;
-    flex-wrap: wrap;
-    justify-content: flex-end;
+    gap: 12px;
+    padding-left: 16px;
+    border-left: 1px solid var(--color-border);
 }
 
 .user-info span {
-    font-size: 0.95rem;
+    font-size: 0.9rem;
     font-weight: 700;
     color: var(--color-text-primary);
-    padding-right: 14px;
-    border-right: 2px solid var(--color-border);
     letter-spacing: -0.01em;
+    white-space: nowrap;
 }
 
 /* Botões do Header */
 .user-info button {
-    padding: 10px 16px;
+    padding: 8px 14px;
     background: var(--color-bg-secondary);
     color: var(--color-text-primary);
     border: 1px solid var(--color-border);
-    border-radius: 8px;
-    font-size: 0.8rem;
+    border-radius: 6px;
+    font-size: 0.75rem;
     font-weight: 700;
     cursor: pointer;
     transition: all var(--transition-base);
     white-space: nowrap;
-    min-height: 40px;
+    min-height: 36px;
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 6px;
+    gap: 4px;
     text-transform: uppercase;
     letter-spacing: 0.05em;
 }
@@ -266,8 +264,8 @@ body {
     background: var(--color-primary);
     color: white;
     border-color: var(--color-primary);
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(79, 70, 229, 0.2);
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-md);
 }
 
 .user-info button.logout-btn {
@@ -279,54 +277,31 @@ body {
 .user-info button.logout-btn:hover {
     background: #b91c1c;
     border-color: #b91c1c;
-    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.2);
+    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.25);
 }
 
 .user-info button.active {
-    background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-light) 100%);
+    background: var(--color-primary);
     color: white;
     border-color: var(--color-primary);
 }
 
 .darkmode-btn {
-    font-size: 1.1rem !important;
-    padding: 8px 12px !important;
+    font-size: 1rem !important;
+    padding: 6px 10px !important;
     min-width: auto !important;
     font-weight: 400 !important;
     letter-spacing: 0 !important;
     text-transform: none !important;
+    background: transparent !important;
+    border: none !important;
+    cursor: pointer !important;
 }
 
 @media (max-width: 1024px) {
-    .header {
-        padding: 20px 24px;
-    }
-
     .header-top {
-        gap: 24px;
-        margin-bottom: 20px;
-    }
-
-    .header-top h1 {
-        font-size: 1.75rem;
-    }
-
-    .header-controls {
-        gap: 16px;
-        min-width: auto;
-    }
-}
-
-@media (max-width: 768px) {
-    .header {
-        padding: 16px 20px;
-        margin-bottom: 20px;
-    }
-
-    .header-top {
-        gap: 16px;
-        margin-bottom: 16px;
-        flex-direction: column;
+        padding: 16px 24px;
+        gap: 20px;
     }
 
     .header-top h1 {
@@ -334,41 +309,97 @@ body {
     }
 
     .header-controls {
-        width: 100%;
-        min-width: auto;
+        gap: 16px;
     }
 }
 
-@media (max-width: 480px) {
-    .header {
-        padding: 12px 16px;
-    }
-
+@media (max-width: 768px) {
     .header-top {
-        gap: 12px;
-        margin-bottom: 12px;
+        padding: 14px 18px;
+        gap: 16px;
+        flex-wrap: wrap;
     }
 
     .header-top h1 {
-        font-size: 1.25rem;
+        font-size: 1.35rem;
+        flex: 1 1 100%;
     }
 
     .header-controls {
-        gap: 8px;
+        width: 100%;
+        gap: 12px;
+    }
+
+    .connectivity-status {
+        order: 1;
     }
 
     .user-info {
+        order: 2;
+        width: 100%;
+        padding-left: 0;
+        border-left: none;
+        flex-wrap: wrap;
         gap: 8px;
     }
 
     .user-info span {
-        border-right: none;
-        padding-right: 0;
+        flex: 1 1 100%;
     }
 
     .user-info button {
-        padding: 8px 12px;
+        flex: 1 1 auto;
+        padding: 8px 10px;
         font-size: 0.7rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .header-top {
+        padding: 12px 14px;
+        gap: 12px;
+    }
+
+    .header-top h1 {
+        font-size: 1.15rem;
+    }
+
+    .header-controls {
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .connectivity-status {
+        width: 100%;
+    }
+
+    .status-indicator {
+        font-size: 0.75rem;
+        padding: 8px 12px;
+        width: 100%;
+        justify-content: center;
+    }
+
+    .user-info {
+        width: 100%;
+        gap: 6px;
+    }
+
+    .user-info span {
+        order: 1;
+        width: 100%;
+        margin-bottom: 6px;
+        font-size: 0.8rem;
+    }
+
+    .user-info button {
+        font-size: 0.65rem;
+        padding: 6px 8px;
+        flex: 1 1 auto;
+    }
+
+    .darkmode-btn {
+        flex: 0 0 auto !important;
     }
 }
 
