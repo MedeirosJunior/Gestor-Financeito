@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo, Suspense } from 'react';
 import './App.css';
 import './mobile.css';
+import './professional.css';
 import config from './config';
 import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
@@ -85,10 +86,10 @@ const ValidationUtils = {
 
   // Validar credenciais de login
   isValidCredentials: (username, password) => {
-    return ValidationUtils.isNotEmpty(username) && 
-           ValidationUtils.isNotEmpty(password) && 
-           username.length >= 3 && 
-           password.length >= 3;
+    return ValidationUtils.isNotEmpty(username) &&
+      ValidationUtils.isNotEmpty(password) &&
+      username.length >= 3 &&
+      password.length >= 3;
   }
 };
 
@@ -97,12 +98,12 @@ const ErrorHandler = {
   // Tratar erros de API
   handleApiError: (error, operation = 'operação') => {
     console.error(`Erro na ${operation}:`, error);
-    
+
     if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) {
       toast.error('Erro de conexão com servidor. Verifique sua internet e tente novamente.');
       return;
     }
-    
+
     if (error.status) {
       switch (error.status) {
         case 400:
@@ -131,7 +132,7 @@ const ErrorHandler = {
   // Tratar erros de localStorage
   handleStorageError: (error, operation = 'salvar dados') => {
     console.error(`Erro de armazenamento ao ${operation}:`, error);
-    
+
     if (error.name === 'QuotaExceededError') {
       toast.error('Espaço de armazenamento esgotado. Limpe alguns dados antigos.');
     } else {
@@ -151,7 +152,7 @@ const ConnectivityUtils = {
         headers: { 'Content-Type': 'application/json' },
         signal: AbortSignal.timeout(10000) // Timeout de 10 segundos
       });
-      
+
       const isAvailable = response.ok;
       console.log('Resultado do teste de API:', isAvailable ? 'DISPONÍVEL' : 'INDISPONÍVEL');
       return isAvailable;
@@ -246,7 +247,7 @@ const CategoryManager = {
     if (!ValidationUtils.isNotEmpty(category.name)) {
       return { valid: false, error: 'Nome da categoria é obrigatório' };
     }
-    
+
     if (category.name.length > 30) {
       return { valid: false, error: 'Nome deve ter no máximo 30 caracteres' };
     }
@@ -265,7 +266,7 @@ const CategoryManager = {
   // Verificar se categoria já existe
   categoryExists: (name, type, excludeId = null) => {
     const categories = CategoryManager.loadCategories();
-    return categories[type].some(cat => 
+    return categories[type].some(cat =>
       cat.name.toLowerCase() === name.toLowerCase() && cat.id !== excludeId
     );
   },
@@ -290,11 +291,11 @@ function App() {
   const [dueAlerts, setDueAlerts] = useState([]);
   // Estado para modo escuro
   const [darkMode, setDarkMode] = useState(false);
-  
+
   // Estado para conectividade da API
   const [isApiAvailable, setIsApiAvailable] = useState(false);
   const [apiChecked, setApiChecked] = useState(false);
-  
+
   // Estado para categorias personalizadas
   const [categories, setCategories] = useState(CategoryManager.defaultCategories);
   const [customCategories, setCustomCategories] = useState({ entrada: [], despesa: [] });
@@ -305,26 +306,26 @@ function App() {
     const authStatus = localStorage.getItem('isAuthenticated');
     const userData = localStorage.getItem('currentUser');
     const authTimestamp = localStorage.getItem('authTimestamp');
-    
+
     console.log('📋 Dados do localStorage:', {
       authStatus,
       userData,
       authTimestamp
     });
-    
+
     // Verificar se a autenticação é válida e não expirou (24 horas)
     if (authStatus === 'true' && userData && authTimestamp) {
       const now = new Date().getTime();
       const authTime = parseInt(authTimestamp);
       const twentyFourHours = 24 * 60 * 60 * 1000; // 24 horas em ms
-      
+
       console.log('⏰ Verificando expiração:', {
         now,
         authTime,
         difference: now - authTime,
         expired: (now - authTime) >= twentyFourHours
       });
-      
+
       if (now - authTime < twentyFourHours) {
         try {
           const user = JSON.parse(userData);
@@ -354,14 +355,14 @@ function App() {
     const checkApi = async () => {
       console.log('=== VERIFICANDO DISPONIBILIDADE DA API ===');
       setApiChecked(false);
-      
+
       try {
         const available = await ConnectivityUtils.checkApiHealth();
         console.log('Resultado final da verificação:', available);
-        
+
         setIsApiAvailable(available);
         setApiChecked(true);
-        
+
         if (available) {
           console.log('✅ API disponível - sistema operacional');
           toast.success('Conectado ao servidor!', { autoClose: 2000 });
@@ -376,9 +377,9 @@ function App() {
         toast.error('Erro ao conectar com o servidor.', { autoClose: 5000 });
       }
     };
-    
+
     checkApi();
-    
+
     // Recheck API a cada 30 segundos se estiver offline
     const interval = setInterval(() => {
       if (!isApiAvailable) {
@@ -386,7 +387,7 @@ function App() {
         checkApi();
       }
     }, 30000);
-    
+
     return () => clearInterval(interval);
   }, [isApiAvailable]);
 
@@ -449,7 +450,7 @@ function App() {
 
     const updatedCustomCategories = {
       ...customCategories,
-      [type]: customCategories[type].map(cat => 
+      [type]: customCategories[type].map(cat =>
         cat.id === categoryId ? { ...categoryData, id: categoryId, custom: true } : cat
       )
     };
@@ -527,7 +528,7 @@ function App() {
     }
 
     const validCategoryIds = categories[transaction.type]?.map(cat => cat.id) || [];
-    
+
     if (!validCategoryIds.includes(transaction.category)) {
       toast.error('Categoria inválida!');
       return;
@@ -593,7 +594,7 @@ function App() {
     setLoadingTransactions(true);
     try {
       console.log('🗑️ Tentando excluir transação:', id, 'para usuário:', currentUser.email);
-      
+
       const response = await fetch(`${config.API_URL}/transactions/${id}?userId=${encodeURIComponent(currentUser.email)}`, {
         method: 'DELETE',
       });
@@ -630,7 +631,7 @@ function App() {
 
   const handleLogin = useCallback((user) => {
     console.log('🔐 HandleLogin chamado com:', user);
-    
+
     if (!user || !ValidationUtils.isValidCredentials(user.name, user.email)) {
       console.log('❌ Dados de usuário inválidos:', user);
       toast.error('Dados de usuário inválidos!');
@@ -647,17 +648,17 @@ function App() {
 
       setIsAuthenticated(true);
       setCurrentUser(sanitizedUser);
-      
+
       localStorage.setItem('isAuthenticated', 'true');
       localStorage.setItem('currentUser', JSON.stringify(sanitizedUser));
       localStorage.setItem('authTimestamp', new Date().getTime().toString());
-      
+
       console.log('💾 Dados salvos no localStorage:', {
         isAuthenticated: localStorage.getItem('isAuthenticated'),
         currentUser: localStorage.getItem('currentUser'),
         authTimestamp: localStorage.getItem('authTimestamp')
       });
-      
+
       toast.success(`Bem-vindo, ${sanitizedUser.name}!`);
     } catch (error) {
       ErrorHandler.handleStorageError(error, 'realizar login');
@@ -742,7 +743,7 @@ function App() {
         createdAt: new Date().toISOString(),
         nextDue: calculateNextDue(expense.startDate, expense.recurrence)
       };
-      
+
       const updated = [...recurringExpenses, newExpense];
       saveRecurringExpenses(updated);
       toast.success('Despesa recorrente adicionada com sucesso!');
@@ -808,20 +809,20 @@ function App() {
     const month = date.getMonth();
     let businessDays = 0;
     let day = 1;
-    
+
     while (businessDays < 5) {
       const currentDate = new Date(year, month, day);
       const dayOfWeek = currentDate.getDay();
-      
+
       if (dayOfWeek !== 0 && dayOfWeek !== 6) {
         businessDays++;
       }
-      
+
       if (businessDays < 5) {
         day++;
       }
     }
-    
+
     let nextMonth = new Date(year, month + 1, day);
     return nextMonth;
   };
@@ -855,8 +856,8 @@ function App() {
   // Se não estiver autenticado, mostrar tela de login
   if (!isAuthenticated) {
     return (
-      <Login 
-        onLogin={handleLogin} 
+      <Login
+        onLogin={handleLogin}
         loadingAuth={loadingAuth}
         setLoadingAuth={setLoadingAuth}
       />
@@ -865,169 +866,169 @@ function App() {
 
   return (
     <div className={`app${darkMode ? ' dark-mode' : ''}`}>
-          <LoadingOverlay 
-            show={loadingTransactions} 
-            message="Processando transação..." 
-          />
-          <LoadingOverlay 
-            show={loadingRecurring} 
-            message="Processando despesa recorrente..." 
-          />
-          <header className="header">
-            <div className="header-top">
-              <h1>💰 Gestor Financeiro</h1>
-              <div className="header-controls">
-                <div className="connectivity-status">
-                  {apiChecked && (
-                    <span className={`status-indicator ${isApiAvailable ? 'online' : 'offline'}`}>
-                      {isApiAvailable ? '🟢 Online' : '🔴 Offline'}
-                    </span>
-                  )}
-                </div>
-                <div className="user-info">
-                  <span>👤 {currentUser?.name || currentUser?.username}</span>
-                  <button 
-                    className={activeTab === 'usuarios' ? 'active' : ''} 
-                    onClick={() => setActiveTab('usuarios')}
-                    title="Gerenciar Usuários"
-                  >
-                    👥 Usuários
-                  </button>
-                  <button 
-                    className="logout-btn" 
-                    onClick={handleLogout}
-                    title="Sair"
-                  >
-                    🚪 Sair
-                  </button>
-                  <button 
-                    className="darkmode-btn"
-                    onClick={() => setDarkMode(dm => !dm)}
-                    title={darkMode ? 'Modo Claro' : 'Modo Escuro'}
-                    style={{marginLeft: '10px'}}
-                  >
-                    {darkMode ? '🌙' : '☀️'}
-                  </button>
-                </div>
-              </div>
+      <LoadingOverlay
+        show={loadingTransactions}
+        message="Processando transação..."
+      />
+      <LoadingOverlay
+        show={loadingRecurring}
+        message="Processando despesa recorrente..."
+      />
+      <header className="header">
+        <div className="header-top">
+          <h1>💰 Gestor Financeiro</h1>
+          <div className="header-controls">
+            <div className="connectivity-status">
+              {apiChecked && (
+                <span className={`status-indicator ${isApiAvailable ? 'online' : 'offline'}`}>
+                  {isApiAvailable ? '🟢 Online' : '🔴 Offline'}
+                </span>
+              )}
             </div>
-            <nav className="nav">
-              <button 
-                className={activeTab === 'dashboard' ? 'active' : ''} 
-                onClick={() => setActiveTab('dashboard')}
+            <div className="user-info">
+              <span>👤 {currentUser?.name || currentUser?.username}</span>
+              <button
+                className={activeTab === 'usuarios' ? 'active' : ''}
+                onClick={() => setActiveTab('usuarios')}
+                title="Gerenciar Usuários"
               >
-                📊 Dashboard
+                👥 Usuários
               </button>
-              <button 
-                className={activeTab === 'entradas' ? 'active' : ''} 
-                onClick={() => setActiveTab('entradas')}
+              <button
+                className="logout-btn"
+                onClick={handleLogout}
+                title="Sair"
               >
-                💵 Entradas
+                🚪 Sair
               </button>
-              <button 
-                className={activeTab === 'despesas' ? 'active' : ''} 
-                onClick={() => setActiveTab('despesas')}
+              <button
+                className="darkmode-btn"
+                onClick={() => setDarkMode(dm => !dm)}
+                title={darkMode ? 'Modo Claro' : 'Modo Escuro'}
+                style={{ marginLeft: '10px' }}
               >
-                💸 Despesas
+                {darkMode ? '🌙' : '☀️'}
               </button>
-              <button 
-                className={activeTab === 'relatorios' ? 'active' : ''} 
-                onClick={() => setActiveTab('relatorios')}
-              >
-                📈 Relatórios
-              </button>
-              <button 
-                className={activeTab === 'historico' ? 'active' : ''} 
-                onClick={() => setActiveTab('historico')}
-              >
-                📋 Histórico
-              </button>
-              <button 
-                className={activeTab === 'recorrentes' ? 'active' : ''} 
-                onClick={() => setActiveTab('recorrentes')}
-              >
-                🔄 Recorrentes
-              </button>
-              <button 
-                className={activeTab === 'categorias' ? 'active' : ''} 
-                onClick={() => setActiveTab('categorias')}
-              >
-                🏷️ Categorias
-              </button>
-            </nav>
-          </header>
-          <main className="main">
-            {loading && <div className="loading">Carregando...</div>}
-            <Suspense fallback={<SuspenseLoader message="Carregando aba..." />}>
-              {activeTab === 'dashboard' && (
-                <Dashboard 
-                  transactions={transactions} 
-                  dueAlerts={dueAlerts}
-                />
-              )}
-              {activeTab === 'entradas' && (
-                <LancamentoForm 
-                  type="entrada" 
-                  onAdd={addTransaction}
-                  title="💵 Lançar Entrada"
-                  categories={categories}
-                  isApiAvailable={isApiAvailable}
-                />
-              )}
-              {activeTab === 'despesas' && (
-                <LancamentoForm 
-                  type="despesa" 
-                  onAdd={addTransaction}
-                  title="💸 Lançar Despesa"
-                  categories={categories}
-                  isApiAvailable={isApiAvailable}
-                />
-              )}
-              {activeTab === 'relatorios' && (
-                <Relatorios 
-                  transactions={transactions} 
-                  loadingExport={loadingExport}
-                  setLoadingExport={setLoadingExport}
-                />
-              )}
-              {activeTab === 'historico' && (
-                  <Historico 
-                    transactions={transactions} 
-                    onDelete={deleteTransaction}
-                    isApiAvailable={isApiAvailable}
-                    categories={categories}
-                  />
-              )}
-              {activeTab === 'recorrentes' && (
-                <DespesasRecorrentes 
-                  expenses={recurringExpenses}
-                  onAdd={addRecurringExpense}
-                  onDelete={deleteRecurringExpense}
-                />
-              )}
-              {activeTab === 'categorias' && (
-                <CategoryManagement 
-                  categories={categories}
-                  onAddCategory={addCustomCategory}
-                  onUpdateCategory={updateCustomCategory}
-                  onDeleteCategory={deleteCustomCategory}
-                />
-              )}
-              {activeTab === 'usuarios' && (
-                <GerenciarUsuarios />
-              )}
-            </Suspense>
-          </main>
-
-          <ToastContainer />
+            </div>
+          </div>
         </div>
-      );
+        <nav className="nav">
+          <button
+            className={activeTab === 'dashboard' ? 'active' : ''}
+            onClick={() => setActiveTab('dashboard')}
+          >
+            📊 Dashboard
+          </button>
+          <button
+            className={activeTab === 'entradas' ? 'active' : ''}
+            onClick={() => setActiveTab('entradas')}
+          >
+            💵 Entradas
+          </button>
+          <button
+            className={activeTab === 'despesas' ? 'active' : ''}
+            onClick={() => setActiveTab('despesas')}
+          >
+            💸 Despesas
+          </button>
+          <button
+            className={activeTab === 'relatorios' ? 'active' : ''}
+            onClick={() => setActiveTab('relatorios')}
+          >
+            📈 Relatórios
+          </button>
+          <button
+            className={activeTab === 'historico' ? 'active' : ''}
+            onClick={() => setActiveTab('historico')}
+          >
+            📋 Histórico
+          </button>
+          <button
+            className={activeTab === 'recorrentes' ? 'active' : ''}
+            onClick={() => setActiveTab('recorrentes')}
+          >
+            🔄 Recorrentes
+          </button>
+          <button
+            className={activeTab === 'categorias' ? 'active' : ''}
+            onClick={() => setActiveTab('categorias')}
+          >
+            🏷️ Categorias
+          </button>
+        </nav>
+      </header>
+      <main className="main">
+        {loading && <div className="loading">Carregando...</div>}
+        <Suspense fallback={<SuspenseLoader message="Carregando aba..." />}>
+          {activeTab === 'dashboard' && (
+            <Dashboard
+              transactions={transactions}
+              dueAlerts={dueAlerts}
+            />
+          )}
+          {activeTab === 'entradas' && (
+            <LancamentoForm
+              type="entrada"
+              onAdd={addTransaction}
+              title="💵 Lançar Entrada"
+              categories={categories}
+              isApiAvailable={isApiAvailable}
+            />
+          )}
+          {activeTab === 'despesas' && (
+            <LancamentoForm
+              type="despesa"
+              onAdd={addTransaction}
+              title="💸 Lançar Despesa"
+              categories={categories}
+              isApiAvailable={isApiAvailable}
+            />
+          )}
+          {activeTab === 'relatorios' && (
+            <Relatorios
+              transactions={transactions}
+              loadingExport={loadingExport}
+              setLoadingExport={setLoadingExport}
+            />
+          )}
+          {activeTab === 'historico' && (
+            <Historico
+              transactions={transactions}
+              onDelete={deleteTransaction}
+              isApiAvailable={isApiAvailable}
+              categories={categories}
+            />
+          )}
+          {activeTab === 'recorrentes' && (
+            <DespesasRecorrentes
+              expenses={recurringExpenses}
+              onAdd={addRecurringExpense}
+              onDelete={deleteRecurringExpense}
+            />
+          )}
+          {activeTab === 'categorias' && (
+            <CategoryManagement
+              categories={categories}
+              onAddCategory={addCustomCategory}
+              onUpdateCategory={updateCustomCategory}
+              onDeleteCategory={deleteCustomCategory}
+            />
+          )}
+          {activeTab === 'usuarios' && (
+            <GerenciarUsuarios />
+          )}
+        </Suspense>
+      </main>
+
+      <ToastContainer />
+    </div>
+  );
 }
 
 // Componentes de Loading
 function Spinner({ size = '20px', color = '#007bff' }) {
   return (
-    <div 
+    <div
       className="spinner"
       style={{
         width: size,
@@ -1057,11 +1058,11 @@ function ButtonSpinner({ loading, children, onClick, className = '', disabled = 
       )}
     </button>
   );
- }
+}
 
 function LoadingOverlay({ show, message = 'Carregando...' }) {
   if (!show) return null;
-  
+
   return (
     <div className="loading-overlay">
       <div className="loading-content">
@@ -1083,7 +1084,7 @@ const Login = React.memo(({ onLogin, loadingAuth, setLoadingAuth }) => {
   const handleSubmit = useCallback(async (e) => {
     e.preventDefault();
     setLoadingAuth(true);
-    
+
     try {
       // Fazer login via API
       const response = await fetch(`${config.API_URL}/auth/login`, {
@@ -1106,7 +1107,7 @@ const Login = React.memo(({ onLogin, loadingAuth, setLoadingAuth }) => {
           email: data.user.email,
           id: data.user.id
         };
-        
+
         onLogin(user);
         toast.success('Login realizado com sucesso!');
       } else {
@@ -1123,11 +1124,11 @@ const Login = React.memo(({ onLogin, loadingAuth, setLoadingAuth }) => {
 
   // Otimizar handlers de input com useCallback
   const handleEmailChange = useCallback((e) => {
-    setCredentials(prev => ({...prev, email: e.target.value}));
+    setCredentials(prev => ({ ...prev, email: e.target.value }));
   }, []);
 
   const handlePasswordChange = useCallback((e) => {
-    setCredentials(prev => ({...prev, password: e.target.value}));
+    setCredentials(prev => ({ ...prev, password: e.target.value }));
   }, []);
 
   return (
@@ -1156,23 +1157,23 @@ const Login = React.memo(({ onLogin, loadingAuth, setLoadingAuth }) => {
               required
             />
           </div>
-          <ButtonSpinner 
-            type="submit" 
-            className="login-btn" 
+          <ButtonSpinner
+            type="submit"
+            className="login-btn"
             loading={loadingAuth}
           >
             Entrar
           </ButtonSpinner>
         </form>
-        
+
         <div className="login-info">
           <p><strong>Sistema:</strong> Gestor Financeiro</p>
           <p><strong>Status:</strong> Conectado à API</p>
         </div>
-        
+
         <div className="login-actions">
-          <button 
-            type="button" 
+          <button
+            type="button"
             className="clear-data-btn"
             onClick={() => {
               if (window.confirm('⚠️ ATENÇÃO: Isso vai limpar apenas os dados do navegador (não os dados do servidor). Deseja continuar?')) {
@@ -1226,7 +1227,7 @@ function GerenciarUsuarios() {
   // Adicionar novo usuário via API
   const handleAddUser = async (e) => {
     e.preventDefault();
-    
+
     if (newUser.password.length < 6) {
       toast.error('A senha deve ter pelo menos 6 caracteres!');
       return;
@@ -1293,9 +1294,9 @@ function GerenciarUsuarios() {
   return (
     <div className="usuarios-management">
       <h2>👥 Gerenciar Usuários</h2>
-      
+
       <div className="users-actions">
-        <button 
+        <button
           onClick={() => setIsAddingUser(!isAddingUser)}
           className="add-user-btn"
         >
@@ -1312,7 +1313,7 @@ function GerenciarUsuarios() {
               <input
                 type="email"
                 value={newUser.email}
-                onChange={(e) => setNewUser({...newUser, email: e.target.value})}
+                onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
                 required
               />
             </div>
@@ -1321,7 +1322,7 @@ function GerenciarUsuarios() {
               <input
                 type="text"
                 value={newUser.name}
-                onChange={(e) => setNewUser({...newUser, name: e.target.value})}
+                onChange={(e) => setNewUser({ ...newUser, name: e.target.value })}
                 required
               />
             </div>
@@ -1330,14 +1331,14 @@ function GerenciarUsuarios() {
               <input
                 type="password"
                 value={newUser.password}
-                onChange={(e) => setNewUser({...newUser, password: e.target.value})}
+                onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
                 required
                 minLength="6"
               />
             </div>
-            <ButtonSpinner 
-              type="submit" 
-              className="submit-btn" 
+            <ButtonSpinner
+              type="submit"
+              className="submit-btn"
               loading={loading}
             >
               Cadastrar
@@ -1362,7 +1363,7 @@ function GerenciarUsuarios() {
               </div>
               <div className="user-actions">
                 {user.email !== 'junior395@gmail.com' && (
-                  <ButtonSpinner 
+                  <ButtonSpinner
                     onClick={() => handleRemoveUser(user.id, user.email)}
                     className="remove-btn"
                     loading={loading}
@@ -1380,11 +1381,11 @@ function GerenciarUsuarios() {
 }
 
 // Componente de Gerenciamento de Categorias
-const CategoryManagement = React.memo(({ 
-  categories, 
-  onAddCategory, 
-  onUpdateCategory, 
-  onDeleteCategory 
+const CategoryManagement = React.memo(({
+  categories,
+  onAddCategory,
+  onUpdateCategory,
+  onDeleteCategory
 }) => {
   const [activeType, setActiveType] = useState('despesa');
   const [isAddingCategory, setIsAddingCategory] = useState(false);
@@ -1416,7 +1417,7 @@ const CategoryManagement = React.memo(({
   // Submeter formulário
   const handleSubmit = useCallback((e) => {
     e.preventDefault();
-    
+
     if (editingCategory) {
       // Atualizar categoria existente
       if (onUpdateCategory(activeType, editingCategory.id, categoryForm)) {
@@ -1440,15 +1441,15 @@ const CategoryManagement = React.memo(({
   return (
     <div className="category-management">
       <h2>🏷️ Gerenciar Categorias</h2>
-      
+
       <div className="category-type-tabs">
-        <button 
+        <button
           className={activeType === 'despesa' ? 'active' : ''}
           onClick={() => setActiveType('despesa')}
         >
           💸 Despesas
         </button>
-        <button 
+        <button
           className={activeType === 'entrada' ? 'active' : ''}
           onClick={() => setActiveType('entrada')}
         >
@@ -1457,7 +1458,7 @@ const CategoryManagement = React.memo(({
       </div>
 
       <div className="category-actions">
-        <button 
+        <button
           className="add-category-btn"
           onClick={() => setIsAddingCategory(true)}
           disabled={isAddingCategory || editingCategory}
@@ -1469,13 +1470,13 @@ const CategoryManagement = React.memo(({
       {(isAddingCategory || editingCategory) && (
         <form className="category-form" onSubmit={handleSubmit}>
           <h3>{editingCategory ? 'Editar Categoria' : 'Nova Categoria'}</h3>
-          
+
           <div className="form-group">
             <label>Nome da Categoria:</label>
             <input
               type="text"
               value={categoryForm.name}
-              onChange={(e) => setCategoryForm({...categoryForm, name: e.target.value})}
+              onChange={(e) => setCategoryForm({ ...categoryForm, name: e.target.value })}
               placeholder="Ex: Educação, Investimentos..."
               maxLength={30}
               required
@@ -1490,7 +1491,7 @@ const CategoryManagement = React.memo(({
                   key={icon}
                   type="button"
                   className={`icon-option ${categoryForm.icon === icon ? 'selected' : ''}`}
-                  onClick={() => setCategoryForm({...categoryForm, icon})}
+                  onClick={() => setCategoryForm({ ...categoryForm, icon })}
                 >
                   {icon}
                 </button>
@@ -1507,7 +1508,7 @@ const CategoryManagement = React.memo(({
                   type="button"
                   className={`color-option ${categoryForm.color === color ? 'selected' : ''}`}
                   style={{ backgroundColor: color }}
-                  onClick={() => setCategoryForm({...categoryForm, color})}
+                  onClick={() => setCategoryForm({ ...categoryForm, color })}
                 />
               ))}
             </div>
@@ -1526,11 +1527,11 @@ const CategoryManagement = React.memo(({
 
       <div className="categories-list">
         <h3>Categorias de {activeType === 'entrada' ? 'Receitas' : 'Despesas'}</h3>
-        
+
         <div className="categories-grid">
           {categories[activeType]?.map(category => (
-            <div 
-              key={category.id} 
+            <div
+              key={category.id}
               className={`category-item ${category.custom ? 'custom' : 'default'}`}
               style={{ borderLeftColor: category.color }}
             >
@@ -1539,17 +1540,17 @@ const CategoryManagement = React.memo(({
                 <span className="category-name">{category.name}</span>
                 {category.custom && <span className="custom-badge">Personalizada</span>}
               </div>
-              
+
               {category.custom && (
                 <div className="category-actions">
-                  <button 
+                  <button
                     className="edit-btn"
                     onClick={() => startEdit(category)}
                     disabled={isAddingCategory || editingCategory}
                   >
                     ✏️
                   </button>
-                  <button 
+                  <button
                     className="delete-btn"
                     onClick={() => handleDelete(category)}
                     disabled={isAddingCategory || editingCategory}
@@ -1569,50 +1570,50 @@ const CategoryManagement = React.memo(({
 // Dashboard com resumo financeiro otimizado
 const Dashboard = React.memo(({ transactions, dueAlerts }) => {
   const currentMonth = new Date().toISOString().slice(0, 7);
-  
+
   // Otimizar filtro de transações mensais com useMemo
-  const monthlyTransactions = useMemo(() => 
-    transactions.filter(t => t.date.startsWith(currentMonth)), 
+  const monthlyTransactions = useMemo(() =>
+    transactions.filter(t => t.date.startsWith(currentMonth)),
     [transactions, currentMonth]
   );
-  
+
   // Otimizar cálculo de entradas com useMemo
-  const totalEntradas = useMemo(() => 
+  const totalEntradas = useMemo(() =>
     monthlyTransactions
       .filter(t => t.type === 'entrada')
       .reduce((sum, t) => sum + parseFloat(t.value), 0),
     [monthlyTransactions]
   );
-    
+
   // Otimizar cálculo de despesas com useMemo
-  const totalDespesas = useMemo(() => 
+  const totalDespesas = useMemo(() =>
     monthlyTransactions
       .filter(t => t.type === 'despesa')
       .reduce((sum, t) => sum + parseFloat(t.value), 0),
     [monthlyTransactions]
   );
-    
+
   // Otimizar cálculo de saldo com useMemo
-  const saldo = useMemo(() => 
-    totalEntradas - totalDespesas, 
+  const saldo = useMemo(() =>
+    totalEntradas - totalDespesas,
     [totalEntradas, totalDespesas]
   );
 
   return (
     <div className="dashboard">
       <h2>📊 Dashboard - {new Date().toLocaleDateString('pt-BR', { year: 'numeric', month: 'long' })}</h2>
-      
+
       <div className="cards">
         <div className="card entradas">
           <h3>💵 Entradas</h3>
           <p>R$ {totalEntradas.toFixed(2)}</p>
         </div>
-        
+
         <div className="card despesas">
           <h3>💸 Despesas</h3>
           <p>R$ {totalDespesas.toFixed(2)}</p>
         </div>
-        
+
         <div className={`card saldo ${saldo >= 0 ? 'positive' : 'negative'}`}>
           <h3>💰 Saldo</h3>
           <p>R$ {saldo.toFixed(2)}</p>
@@ -1724,29 +1725,29 @@ function DespesasRecorrentes({ expenses, onAdd, onDelete }) {
   return (
     <div className="recurring-expenses">
       <h2>🔄 Despesas Recorrentes</h2>
-      
+
       <form onSubmit={handleSubmit} className="recurring-form">
         <div className="form-grid">
           <input
             type="text"
             placeholder="Descrição"
             value={form.description}
-            onChange={(e) => setForm({...form, description: e.target.value})}
+            onChange={(e) => setForm({ ...form, description: e.target.value })}
             required
           />
-          
+
           <input
             type="number"
             step="0.01"
             placeholder="Valor"
             value={form.value}
-            onChange={(e) => setForm({...form, value: e.target.value})}
+            onChange={(e) => setForm({ ...form, value: e.target.value })}
             required
           />
-          
+
           <select
             value={form.category}
-            onChange={(e) => setForm({...form, category: e.target.value})}
+            onChange={(e) => setForm({ ...form, category: e.target.value })}
             required
           >
             <option value="">Categoria</option>
@@ -1754,24 +1755,24 @@ function DespesasRecorrentes({ expenses, onAdd, onDelete }) {
               <option key={cat} value={cat}>{cat}</option>
             ))}
           </select>
-          
+
           <select
             value={form.recurrence}
-            onChange={(e) => setForm({...form, recurrence: e.target.value})}
+            onChange={(e) => setForm({ ...form, recurrence: e.target.value })}
             required
           >
             {recurrenceOptions.map(option => (
               <option key={option.value} value={option.value}>{option.label}</option>
             ))}
           </select>
-          
+
           <input
             type="date"
             value={form.startDate}
-            onChange={(e) => setForm({...form, startDate: e.target.value})}
+            onChange={(e) => setForm({ ...form, startDate: e.target.value })}
             required
           />
-          
+
           <button type="submit">Adicionar Recorrente</button>
         </div>
       </form>
@@ -1818,19 +1819,19 @@ const LancamentoForm = React.memo(({ type, onAdd, title, categories, isApiAvaila
   });
 
   // Usar categorias dinâmicas
-  const availableCategories = useMemo(() => 
-    categories?.[type] || [], 
+  const availableCategories = useMemo(() =>
+    categories?.[type] || [],
     [categories, type]
   );
 
   const handleSubmit = useCallback((e) => {
     e.preventDefault();
-    
+
     if (!isApiAvailable) {
       toast.error('Conexão com servidor necessária para adicionar transações!');
       return;
     }
-    
+
     if (!form.description || !form.value || !form.category) {
       toast.error('Preencha todos os campos obrigatórios!');
       return;
@@ -1858,20 +1859,20 @@ const LancamentoForm = React.memo(({ type, onAdd, title, categories, isApiAvaila
   return (
     <div className={`lancamento-form ${!isApiAvailable ? 'disabled' : ''}`}>
       <h2>{title}</h2>
-      
+
       {!isApiAvailable && (
         <div className="offline-warning">
           <p>⚠️ Conexão com servidor necessária para adicionar transações</p>
         </div>
       )}
-      
+
       <form onSubmit={handleSubmit}>
         <div className="form-group">
           <label>Descrição:</label>
           <input
             type="text"
             value={form.description}
-            onChange={e => setForm({...form, description: e.target.value})}
+            onChange={e => setForm({ ...form, description: e.target.value })}
             placeholder="Ex: Salário, Supermercado..."
             disabled={!isApiAvailable}
             required
@@ -1884,7 +1885,7 @@ const LancamentoForm = React.memo(({ type, onAdd, title, categories, isApiAvaila
             type="number"
             step="0.01"
             value={form.value}
-            onChange={e => setForm({...form, value: e.target.value})}
+            onChange={e => setForm({ ...form, value: e.target.value })}
             placeholder="0.00"
             disabled={!isApiAvailable}
             required
@@ -1895,7 +1896,7 @@ const LancamentoForm = React.memo(({ type, onAdd, title, categories, isApiAvaila
           <label>Categoria:</label>
           <select
             value={form.category}
-            onChange={e => setForm({...form, category: e.target.value})}
+            onChange={e => setForm({ ...form, category: e.target.value })}
             disabled={!isApiAvailable}
             required
           >
@@ -1913,19 +1914,19 @@ const LancamentoForm = React.memo(({ type, onAdd, title, categories, isApiAvaila
           <input
             type="date"
             value={form.date}
-            onChange={e => setForm({...form, date: e.target.value})}
+            onChange={e => setForm({ ...form, date: e.target.value })}
             disabled={!isApiAvailable}
             required
           />
         </div>
 
-        <button 
-          type="submit" 
+        <button
+          type="submit"
           className="submit-btn"
           disabled={!isApiAvailable}
         >
-          {!isApiAvailable 
-            ? 'Servidor Offline' 
+          {!isApiAvailable
+            ? 'Servidor Offline'
             : `Lançar ${type === 'entrada' ? 'Entrada' : 'Despesa'}`
           }
         </button>
@@ -1937,17 +1938,17 @@ const LancamentoForm = React.memo(({ type, onAdd, title, categories, isApiAvaila
 // Relatórios mensais
 function Relatorios({ transactions, loadingExport, setLoadingExport }) {
   const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7));
-  
-  const monthlyData = transactions.filter(t => 
+
+  const monthlyData = transactions.filter(t =>
     t.date.startsWith(selectedMonth)
   );
 
   const entradas = monthlyData.filter(t => t.type === 'entrada');
   const despesas = monthlyData.filter(t => t.type === 'despesa');
-  
+
   const totalEntradas = entradas.reduce((sum, t) => sum + parseFloat(t.value), 0);
   const totalDespesas = despesas.reduce((sum, t) => sum + parseFloat(t.value), 0);
-  
+
   const categoriesData = {};
   despesas.forEach(t => {
     categoriesData[t.category] = (categoriesData[t.category] || 0) + parseFloat(t.value);
@@ -1958,54 +1959,54 @@ function Relatorios({ transactions, loadingExport, setLoadingExport }) {
     setLoadingExport(true);
     try {
       const workbook = XLSX.utils.book_new();
-    
-    // Aba 1: Resumo do Mês
-    const resumoData = [
-      ['Resumo Financeiro', selectedMonth],
-      [''],
-      ['Tipo', 'Valor (R$)'],
-      ['Entradas', totalEntradas.toFixed(2)],
-      ['Despesas', totalDespesas.toFixed(2)],
-      ['Saldo', (totalEntradas - totalDespesas).toFixed(2)]
-    ];
-    const resumoSheet = XLSX.utils.aoa_to_sheet(resumoData);
-    XLSX.utils.book_append_sheet(workbook, resumoSheet, 'Resumo');
 
-    // Aba 2: Transações Detalhadas
-    const transacoesData = [
-      ['Data', 'Descrição', 'Categoria', 'Tipo', 'Valor (R$)']
-    ];
-    monthlyData.forEach(t => {
-      transacoesData.push([
-        new Date(t.date).toLocaleDateString('pt-BR'),
-        t.description,
-        t.category,
-        t.type === 'entrada' ? 'Entrada' : 'Despesa',
-        parseFloat(t.value).toFixed(2)
-      ]);
-    });
-    const transacoesSheet = XLSX.utils.aoa_to_sheet(transacoesData);
-    XLSX.utils.book_append_sheet(workbook, transacoesSheet, 'Transações');
+      // Aba 1: Resumo do Mês
+      const resumoData = [
+        ['Resumo Financeiro', selectedMonth],
+        [''],
+        ['Tipo', 'Valor (R$)'],
+        ['Entradas', totalEntradas.toFixed(2)],
+        ['Despesas', totalDespesas.toFixed(2)],
+        ['Saldo', (totalEntradas - totalDespesas).toFixed(2)]
+      ];
+      const resumoSheet = XLSX.utils.aoa_to_sheet(resumoData);
+      XLSX.utils.book_append_sheet(workbook, resumoSheet, 'Resumo');
 
-    // Aba 3: Gastos por Categoria
-    const categoriasData = [
-      ['Categoria', 'Valor (R$)', 'Percentual (%)']
-    ];
-    Object.entries(categoriesData).forEach(([category, value]) => {
-      categoriasData.push([
-        category,
-        value.toFixed(2),
-        ((value / totalDespesas) * 100).toFixed(1) + '%'
-      ]);
-    });
-    const categoriasSheet = XLSX.utils.aoa_to_sheet(categoriasData);
-    XLSX.utils.book_append_sheet(workbook, categoriasSheet, 'Categorias');
+      // Aba 2: Transações Detalhadas
+      const transacoesData = [
+        ['Data', 'Descrição', 'Categoria', 'Tipo', 'Valor (R$)']
+      ];
+      monthlyData.forEach(t => {
+        transacoesData.push([
+          new Date(t.date).toLocaleDateString('pt-BR'),
+          t.description,
+          t.category,
+          t.type === 'entrada' ? 'Entrada' : 'Despesa',
+          parseFloat(t.value).toFixed(2)
+        ]);
+      });
+      const transacoesSheet = XLSX.utils.aoa_to_sheet(transacoesData);
+      XLSX.utils.book_append_sheet(workbook, transacoesSheet, 'Transações');
 
-    // Salvar arquivo
-    const buffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
-    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-    saveAs(blob, `relatorio-financeiro-${selectedMonth}.xlsx`);
-    toast.success('Relatório Excel exportado com sucesso!');
+      // Aba 3: Gastos por Categoria
+      const categoriasData = [
+        ['Categoria', 'Valor (R$)', 'Percentual (%)']
+      ];
+      Object.entries(categoriesData).forEach(([category, value]) => {
+        categoriasData.push([
+          category,
+          value.toFixed(2),
+          ((value / totalDespesas) * 100).toFixed(1) + '%'
+        ]);
+      });
+      const categoriasSheet = XLSX.utils.aoa_to_sheet(categoriasData);
+      XLSX.utils.book_append_sheet(workbook, categoriasSheet, 'Categorias');
+
+      // Salvar arquivo
+      const buffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
+      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      saveAs(blob, `relatorio-financeiro-${selectedMonth}.xlsx`);
+      toast.success('Relatório Excel exportado com sucesso!');
     } catch (error) {
       console.error('Erro ao exportar Excel:', error);
       toast.error('Erro ao exportar relatório Excel. Tente novamente.');
@@ -2032,7 +2033,7 @@ function Relatorios({ transactions, loadingExport, setLoadingExport }) {
       const csvData = [
         ['Data', 'Descrição', 'Categoria', 'Tipo', 'Valor (R$)']
       ];
-      
+
       // Validar e sanitizar cada transação antes de exportar
       monthlyData.forEach(t => {
         if (t && ValidationUtils.isValidDate(t.date) && ValidationUtils.isNotEmpty(t.description)) {
@@ -2053,11 +2054,11 @@ function Relatorios({ transactions, loadingExport, setLoadingExport }) {
 
       const csv = csvData.map(row => row.join(',')).join('\n');
       const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
-      
+
       // Sanitizar nome do arquivo
       const fileName = `transacoes-${ValidationUtils.sanitizeText(selectedMonth)}.csv`;
       saveAs(blob, fileName);
-      
+
       toast.success(`Relatório CSV exportado com sucesso! ${csvData.length - 1} transações exportadas.`);
     } catch (error) {
       ErrorHandler.handleApiError(error, 'exportar relatório CSV');
@@ -2069,7 +2070,7 @@ function Relatorios({ transactions, loadingExport, setLoadingExport }) {
   return (
     <div className="relatorios">
       <h2>📈 Relatórios Mensais</h2>
-      
+
       <div className="month-selector">
         <label>Selecionar Mês:</label>
         <input
@@ -2080,16 +2081,16 @@ function Relatorios({ transactions, loadingExport, setLoadingExport }) {
       </div>
 
       <div className="export-buttons">
-        <ButtonSpinner 
-          onClick={exportToExcel} 
-          className="export-btn excel" 
+        <ButtonSpinner
+          onClick={exportToExcel}
+          className="export-btn excel"
           loading={loadingExport}
         >
           📊 Exportar Excel
         </ButtonSpinner>
-        <ButtonSpinner 
-          onClick={exportToCSV} 
-          className="export-btn csv" 
+        <ButtonSpinner
+          onClick={exportToCSV}
+          className="export-btn csv"
           loading={loadingExport}
         >
           📄 Exportar CSV
@@ -2131,11 +2132,11 @@ const Historico = React.memo(({ transactions, onDelete, isApiAvailable }) => {
   const debouncedSearchTerm = useDebounce(searchTerm, 300);
 
   // Otimizar filtros com useMemo incluindo busca e validação de usuário
-  const filteredTransactions = useMemo(() => 
+  const filteredTransactions = useMemo(() =>
     transactions.filter(t => {
       const typeMatch = filter === 'all' || t.type === filter;
       const monthMatch = !monthFilter || t.date.startsWith(monthFilter);
-      const searchMatch = !debouncedSearchTerm || 
+      const searchMatch = !debouncedSearchTerm ||
         t.description.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
         t.category.toLowerCase().includes(debouncedSearchTerm.toLowerCase());
       return typeMatch && monthMatch && searchMatch;
@@ -2146,13 +2147,13 @@ const Historico = React.memo(({ transactions, onDelete, isApiAvailable }) => {
   // Função para exportar histórico para Excel
   const exportHistoricoToExcel = () => {
     const workbook = XLSX.utils.book_new();
-    
+
     const historicoData = [
       ['Histórico de Transações'],
       [''],
       ['Data', 'Descrição', 'Categoria', 'Tipo', 'Valor (R$)']
     ];
-    
+
     filteredTransactions.forEach(t => {
       historicoData.push([
         new Date(t.date).toLocaleDateString('pt-BR'),
@@ -2168,7 +2169,7 @@ const Historico = React.memo(({ transactions, onDelete, isApiAvailable }) => {
 
     const buffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
     const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-    
+
     const filterText = filter === 'all' ? 'todas' : filter;
     const monthText = monthFilter ? `-${monthFilter}` : '';
     saveAs(blob, `historico-${filterText}${monthText}.xlsx`);
@@ -2177,21 +2178,21 @@ const Historico = React.memo(({ transactions, onDelete, isApiAvailable }) => {
   return (
     <div className="historico">
       <h2>📋 Histórico de Transações</h2>
-      
+
       <div className="filters">
         <select value={filter} onChange={e => setFilter(e.target.value)}>
           <option value="all">Todas</option>
           <option value="entrada">Entradas</option>
           <option value="despesa">Despesas</option>
         </select>
-        
+
         <input
           type="month"
           value={monthFilter}
           onChange={e => setMonthFilter(e.target.value)}
           placeholder="Filtrar por mês"
         />
-        
+
         <input
           type="text"
           value={searchTerm}
@@ -2199,7 +2200,7 @@ const Historico = React.memo(({ transactions, onDelete, isApiAvailable }) => {
           placeholder="🔍 Buscar descrição ou categoria..."
           className="search-input"
         />
-        
+
         <button onClick={exportHistoricoToExcel} className="export-btn excel">
           📊 Exportar
         </button>
@@ -2217,19 +2218,19 @@ const Historico = React.memo(({ transactions, onDelete, isApiAvailable }) => {
               <span className={`value ${transaction.type}`}>
                 {transaction.type === 'entrada' ? '+' : '-'}R$ {parseFloat(transaction.value).toFixed(2)}
               </span>
-              <button 
+              <button
                 onClick={() => {
                   if (!isApiAvailable) {
                     alert('Conexão com servidor necessária para excluir transações.');
                     return;
                   }
-                  
+
                   console.log('Transação a ser excluída:', {
                     id: transaction.id,
                     userId: transaction.userId,
                     description: transaction.description
                   });
-                  
+
                   if (window.confirm(`Deseja realmente excluir "${transaction.description}"?`)) {
                     onDelete(transaction.id);
                   }
