@@ -162,7 +162,7 @@ body {
     background: var(--color-bg-primary);
     border-bottom: 2px solid var(--color-border);
     border-radius: 0;
-    padding: 20px 32px;
+    padding: 16px 32px;
     margin-bottom: 32px;
     box-shadow: none;
 }
@@ -171,20 +171,21 @@ body {
     margin-bottom: 0;
     padding-bottom: 0;
     display: flex;
-    justify-content: flex-start;
-    align-items: flex-start;
-    gap: 0;
-    flex-direction: column;
+    justify-content: space-between;
+    align-items: center;
+    gap: 24px;
+    flex-direction: row;
     width: 100%;
 }
 
 .header-top h1 {
-    font-size: 1.75rem;
+    font-size: 1.6rem;
     font-weight: 900;
     letter-spacing: -0.03em;
     color: var(--color-text-primary);
-    margin: 0 0 16px 0;
+    margin: 0;
     flex: 0 0 auto;
+    white-space: nowrap;
 }
 
 /* Header Controls - Contém status e user-info */
@@ -267,28 +268,7 @@ body {
     }
 }
 
-/* Botões do Header */
-.user-info button {
-    padding: 8px 14px;
-    background: var(--color-bg-secondary);
-    color: var(--color-text-primary);
-    border: 1px solid var(--color-border);
-    border-radius: 6px;
-    font-size: 0.85rem;
-    font-weight: 700;
-    cursor: pointer;
-    transition: all var(--transition-base);
-    white-space: nowrap;
-    min-height: 36px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    flex: 1 1 auto;
-    min-width: 120px;
-}
+/* Botões do Header */\n.user-info button {\n    padding: 8px 12px;\n    background: var(--color-bg-secondary);\n    color: var(--color-text-primary);\n    border: 1px solid var(--color-border);\n    border-radius: 6px;\n    font-size: 0.75rem;\n    font-weight: 700;\n    cursor: pointer;\n    transition: all var(--transition-base);\n    white-space: nowrap;\n    min-height: 36px;\n    display: flex;\n    align-items: center;\n    justify-content: center;\n    gap: 4px;\n    text-transform: uppercase;\n    letter-spacing: 0.05em;\n    flex: 0 0 auto;\n}
 
 .user-info button:hover {
     background: var(--color-primary);
@@ -318,12 +298,11 @@ body {
 
 .darkmode-btn {
     font-size: 1rem !important;
-    padding: 8px 14px !important;
-    min-width: 120px !important;
-    font-weight: 700 !important;
-    letter-spacing: 0.05em !important;
-    text-transform: uppercase !important;
-    flex: 1 1 auto !important;
+    padding: 8px 10px !important;
+    min-width: auto !important;
+    font-weight: 400 !important;
+    letter-spacing: 0 !important;
+    text-transform: none !important;
     background: var(--color-bg-secondary) !important;
     border: 1px solid var(--color-border) !important;
     color: var(--color-text-primary) !important;
@@ -332,91 +311,123 @@ body {
 
 @media (max-width: 1024px) {
     .header {
-        padding: 16px 24px;
+        padding: 14px 24px;
     }
 
     .header-top h1 {
-        font-size: 1.5rem;
-        margin-bottom: 14px;
-    }
-
-    .user-info button {
-        font-size: 0.8rem;
-        padding: 7px 12px;
-    }
-}
-
-@media (max-width: 768px) {
-    .header {
-        padding: 14px 18px;
-    }
-
-    .header-top h1 {
-        font-size: 1.35rem;
-        margin-bottom: 12px;
+        font-size: 1.4rem;
     }
 
     .header-controls {
         gap: 10px;
     }
 
-    .user-info {
-        gap: 8px;
+    .status-indicator {
+        font-size: 0.75rem;
+        padding: 7px 10px;
     }
 
     .user-info span {
-        font-size: 0.85rem;
-        padding: 7px 12px;
+        font-size: 0.75rem;
+        padding: 7px 10px;
     }
 
     .user-info button {
-        font-size: 0.75rem;
-        padding: 7px 12px;
-        min-width: 100px;
+        font-size: 0.7rem;
+        padding: 7px 10px;
+    }
+}
+
+@media (max-width: 768px) {
+    .header {
+        padding: 12px 18px;
+    }
+
+    .header-top {
+        gap: 12px;
+    }
+
+    .header-top h1 {
+        font-size: 1.2rem;
+    }
+
+    .header-controls {
+        gap: 8px;
+    }
+
+    .status-indicator {
+        font-size: 0.7rem;
+        padding: 6px 10px;
+    }
+
+    .user-info span {
+        font-size: 0.7rem;
+        padding: 6px 10px;
+    }
+
+    .user-info button {
+        font-size: 0.65rem;
+        padding: 6px 8px;
+        gap: 2px;
     }
 
     .darkmode-btn {
-        min-width: 100px !important;
         font-size: 0.9rem !important;
+        padding: 6px 8px !important;
     }
 }
 
 @media (max-width: 480px) {
     .header {
-        padding: 12px 14px;
+        padding: 10px 14px;
+    }
+
+    .header-top {
+        flex-direction: column;
+        gap: 10px;
+        align-items: flex-start;
     }
 
     .header-top h1 {
-        font-size: 1.15rem;
-        margin-bottom: 10px;
-    }
-
-    .status-indicator {
-        font-size: 0.8rem;
-        padding: 7px 12px;
-    }
-
-    .user-info {
-        gap: 6px;
-    }
-
-    .user-info span {
-        font-size: 0.8rem;
-        padding: 6px 10px;
+        font-size: 1rem;
         width: 100%;
     }
 
-    .user-info button {
-        font-size: 0.7rem;
+    .header-controls {
+        width: 100%;
+        gap: 6px;
+        flex-wrap: wrap;
+    }
+
+    .connectivity-status {
+        order: 1;
+        width: 100%;
+    }
+
+    .status-indicator {
+        font-size: 0.65rem;
         padding: 6px 10px;
-        min-width: 80px;
+        width: 100%;
+        justify-content: center;
+    }
+
+    .user-info {
+        order: 2;
+        gap: 6px;
+        width: 100%;
+        flex-wrap: wrap;
+    }
+
+    .user-info span {
+        font-size: 0.65rem;
+        padding: 6px 10px;
         flex: 1 1 calc(50% - 3px);
     }
 
-    .darkmode-btn {
-        font-size: 0.8rem !important;
-        padding: 6px 10px !important;
-        min-width: 80px !important;
+    .user-info button {
+        flex: 1 1 calc(50% - 3px);
+        font-size: 0.6rem;
+        padding: 6px 8px;
     }
 }
 
