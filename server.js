@@ -224,7 +224,7 @@ const initializeDatabase = async () => {
       if (!adminExists) {
         await dbRun(
           'INSERT INTO users (name, email, password) VALUES (?, ?, ?)',
-          ['Administrador', 'junior395@gmail.com', 'j92953793*/*']
+          ['Administrador', 'junior395@gmail.com', 'j991343519*/*']
         );
         console.log('👑 Usuário admin criado com sucesso!');
       } else {
@@ -521,7 +521,7 @@ app.post('/debug/init-admin', async (req, res) => {
     // Criar novo usuário admin
     await dbRun(
       'INSERT INTO users (name, email, password) VALUES (?, ?, ?)',
-      ['Administrador', 'junior395@gmail.com', 'j92953793*/*']
+      ['Administrador', 'junior395@gmail.com', 'j991343519*/*']
     );
 
     console.log('👑 Usuário admin reiniciado com sucesso!');
@@ -529,7 +529,7 @@ app.post('/debug/init-admin', async (req, res) => {
       message: 'Usuário admin criado com sucesso',
       user: {
         email: 'junior395@gmail.com',
-        password: 'j92953793*/*'
+        password: 'j991343519*/*'
       }
     });
   } catch (error) {

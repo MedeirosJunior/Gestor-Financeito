@@ -7,8 +7,8 @@ Sistema completo de gestão financeira pessoal desenvolvido com React e Node.js.
 **Acesse o sistema em produção**: https://gestor-financeito.onrender.com
 
 ### Credenciais de Teste:
-- **Email**: admin@gestor.com
-- **Senha**: j92953793*/*
+- **Email**: junior395@gmail.com
+- **Senha**: j991343519*/*
 
 ## 🚀 Funcionalidades
 

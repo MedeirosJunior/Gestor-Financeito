@@ -55,8 +55,8 @@ const corsOptions = {
 **Para usar a aplicação:**
 1. Acesse: https://spiffy-bonbon-c3c559.netlify.app/
 2. Crie uma conta ou use as credenciais de admin:
-   - Email: admin@gestor.com
-   - Senha: j92953793*/*
+   - Email: junior395@gmail.com
+   - Senha: j991343519*/*
 
 ## 🎯 Sucesso!
 
