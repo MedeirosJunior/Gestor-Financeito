@@ -162,19 +162,20 @@ body {
     background: var(--color-bg-primary);
     border-bottom: 2px solid var(--color-border);
     border-radius: 0;
-    padding: 0;
+    padding: 20px 32px;
     margin-bottom: 32px;
     box-shadow: none;
 }
 
 .header-top {
-    padding: 20px 32px;
     margin-bottom: 0;
+    padding-bottom: 0;
     display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 32px;
-    border-bottom: 1px solid var(--color-border);
+    justify-content: flex-start;
+    align-items: flex-start;
+    gap: 0;
+    flex-direction: column;
+    width: 100%;
 }
 
 .header-top h1 {
@@ -182,32 +183,34 @@ body {
     font-weight: 900;
     letter-spacing: -0.03em;
     color: var(--color-text-primary);
-    margin: 0;
+    margin: 0 0 16px 0;
     flex: 0 0 auto;
 }
 
 /* Header Controls - Contém status e user-info */
 .header-controls {
     display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 32px;
-    flex: 1;
+    justify-content: flex-start;
+    align-items: flex-start;
+    gap: 12px;
+    flex: 0 0 auto;
+    flex-direction: column;
+    width: 100%;
 }
 
 .connectivity-status {
     display: flex;
     align-items: center;
     gap: 8px;
-    margin-left: auto;
+    order: 1;
 }
 
 .status-indicator {
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 10px 16px;
-    background: rgba(16, 185, 129, 0.08);
+    padding: 8px 14px;
+    background: rgba(16, 185, 129, 0.12);
     border: 2px solid var(--color-success);
     border-radius: 8px;
     font-size: 0.85rem;
@@ -217,7 +220,7 @@ body {
 }
 
 .status-indicator.offline {
-    background: rgba(239, 68, 68, 0.08);
+    background: rgba(239, 68, 68, 0.12);
     border-color: var(--color-danger);
     color: var(--color-danger);
 }
@@ -226,9 +229,12 @@ body {
 .user-info {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding-left: 16px;
-    border-left: 1px solid var(--color-border);
+    gap: 10px;
+    padding-left: 0;
+    border-left: none;
+    flex-wrap: wrap;
+    order: 2;
+    width: 100%;
 }
 
 .user-info span {
@@ -237,6 +243,28 @@ body {
     color: var(--color-text-primary);
     letter-spacing: -0.01em;
     white-space: nowrap;
+    background: var(--color-bg-secondary);
+    padding: 8px 14px;
+    border-radius: 8px;
+    border: 1px solid var(--color-border);
+}
+
+.app.dark-mode .user-info span {
+    background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-light) 100%);
+    color: white;
+    border-color: var(--color-primary);
+    font-weight: 800;
+    letter-spacing: 0.05em;
+}
+
+@media (prefers-color-scheme: dark) {
+    .user-info span {
+        background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-light) 100%);
+        color: white;
+        border-color: var(--color-primary);
+        font-weight: 800;
+        letter-spacing: 0.05em;
+    }
 }
 
 /* Botões do Header */
@@ -246,7 +274,7 @@ body {
     color: var(--color-text-primary);
     border: 1px solid var(--color-border);
     border-radius: 6px;
-    font-size: 0.75rem;
+    font-size: 0.85rem;
     font-weight: 700;
     cursor: pointer;
     transition: all var(--transition-base);
@@ -255,9 +283,11 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 4px;
+    gap: 6px;
     text-transform: uppercase;
     letter-spacing: 0.05em;
+    flex: 1 1 auto;
+    min-width: 120px;
 }
 
 .user-info button:hover {
@@ -288,118 +318,105 @@ body {
 
 .darkmode-btn {
     font-size: 1rem !important;
-    padding: 6px 10px !important;
-    min-width: auto !important;
-    font-weight: 400 !important;
-    letter-spacing: 0 !important;
-    text-transform: none !important;
-    background: transparent !important;
-    border: none !important;
+    padding: 8px 14px !important;
+    min-width: 120px !important;
+    font-weight: 700 !important;
+    letter-spacing: 0.05em !important;
+    text-transform: uppercase !important;
+    flex: 1 1 auto !important;
+    background: var(--color-bg-secondary) !important;
+    border: 1px solid var(--color-border) !important;
+    color: var(--color-text-primary) !important;
     cursor: pointer !important;
 }
 
 @media (max-width: 1024px) {
-    .header-top {
+    .header {
         padding: 16px 24px;
-        gap: 20px;
     }
 
     .header-top h1 {
         font-size: 1.5rem;
+        margin-bottom: 14px;
     }
 
-    .header-controls {
-        gap: 16px;
+    .user-info button {
+        font-size: 0.8rem;
+        padding: 7px 12px;
     }
 }
 
 @media (max-width: 768px) {
-    .header-top {
+    .header {
         padding: 14px 18px;
-        gap: 16px;
-        flex-wrap: wrap;
     }
 
     .header-top h1 {
         font-size: 1.35rem;
-        flex: 1 1 100%;
+        margin-bottom: 12px;
     }
 
     .header-controls {
-        width: 100%;
-        gap: 12px;
-    }
-
-    .connectivity-status {
-        order: 1;
+        gap: 10px;
     }
 
     .user-info {
-        order: 2;
-        width: 100%;
-        padding-left: 0;
-        border-left: none;
-        flex-wrap: wrap;
         gap: 8px;
     }
 
     .user-info span {
-        flex: 1 1 100%;
+        font-size: 0.85rem;
+        padding: 7px 12px;
     }
 
     .user-info button {
-        flex: 1 1 auto;
-        padding: 8px 10px;
-        font-size: 0.7rem;
+        font-size: 0.75rem;
+        padding: 7px 12px;
+        min-width: 100px;
+    }
+
+    .darkmode-btn {
+        min-width: 100px !important;
+        font-size: 0.9rem !important;
     }
 }
 
 @media (max-width: 480px) {
-    .header-top {
+    .header {
         padding: 12px 14px;
-        gap: 12px;
     }
 
     .header-top h1 {
         font-size: 1.15rem;
-    }
-
-    .header-controls {
-        flex-direction: column;
-        gap: 10px;
-    }
-
-    .connectivity-status {
-        width: 100%;
+        margin-bottom: 10px;
     }
 
     .status-indicator {
-        font-size: 0.75rem;
-        padding: 8px 12px;
-        width: 100%;
-        justify-content: center;
+        font-size: 0.8rem;
+        padding: 7px 12px;
     }
 
     .user-info {
-        width: 100%;
         gap: 6px;
     }
 
     .user-info span {
-        order: 1;
-        width: 100%;
-        margin-bottom: 6px;
         font-size: 0.8rem;
+        padding: 6px 10px;
+        width: 100%;
     }
 
     .user-info button {
-        font-size: 0.65rem;
-        padding: 6px 8px;
-        flex: 1 1 auto;
+        font-size: 0.7rem;
+        padding: 6px 10px;
+        min-width: 80px;
+        flex: 1 1 calc(50% - 3px);
     }
 
     .darkmode-btn {
-        flex: 0 0 auto !important;
+        font-size: 0.8rem !important;
+        padding: 6px 10px !important;
+        min-width: 80px !important;
     }
 }
 
