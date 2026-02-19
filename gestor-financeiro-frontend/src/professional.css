@@ -656,96 +656,97 @@ body {
     transform: translateY(-2px);
     box-shadow: 0 8px 16px rgba(79, 70, 229, 0.3);
 }
+
 /* ====================================
    TABLET - 768px
    ==================================== */
 
 @media (max-width: 768px) {
-  .app {
-    padding: 16px;
-  }
+    .app {
+        padding: 16px;
+    }
 
-  .header {
-    padding: 20px 24px;
-    margin-bottom: 24px;
-  }
+    .header {
+        padding: 20px 24px;
+        margin-bottom: 24px;
+    }
 
-  .header h1 {
-    font-size: 1.5rem;
-    margin-bottom: 16px;
-  }
+    .header h1 {
+        font-size: 1.5rem;
+        margin-bottom: 16px;
+    }
 
-  .header-content {
-    flex-direction: column;
-    gap: 16px;
-  }
+    .header-content {
+        flex-direction: column;
+        gap: 16px;
+    }
 
-  .user-section {
-    width: 100%;
-    justify-content: space-between;
-  }
+    .user-section {
+        width: 100%;
+        justify-content: space-between;
+    }
 
-  .user-info {
-    text-align: left;
-  }
+    .user-info {
+        text-align: left;
+    }
 
-  .header-actions {
-    width: 100%;
-    justify-content: space-between;
-  }
+    .header-actions {
+        width: 100%;
+        justify-content: space-between;
+    }
 
-  .btn-action {
-    flex: 1;
-    justify-content: center;
-    min-height: 44px;
-  }
+    .btn-action {
+        flex: 1;
+        justify-content: center;
+        min-height: 44px;
+    }
 
-  .main {
-    padding: 20px;
-    min-height: 400px;
-  }
+    .main {
+        padding: 20px;
+        min-height: 400px;
+    }
 
-  .nav {
-    gap: 8px;
-    padding: 12px;
-  }
+    .nav {
+        gap: 8px;
+        padding: 12px;
+    }
 
-  .nav button {
-    padding: 10px 14px;
-    font-size: 0.85rem;
-    min-height: 40px;
-  }
+    .nav button {
+        padding: 10px 14px;
+        font-size: 0.85rem;
+        min-height: 40px;
+    }
 
-  .cards {
-    grid-template-columns: repeat(2, 1fr);
-    gap: 16px;
-  }
+    .cards {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 16px;
+    }
 
-  .card {
-    padding: 20px;
-  }
+    .card {
+        padding: 20px;
+    }
 
-  .card .value {
-    font-size: 2rem;
-  }
+    .card .value {
+        font-size: 2rem;
+    }
 
-  .transaction-item {
-    grid-template-columns: 100px 1fr 100px;
-    gap: 12px;
-    padding: 14px 16px;
-  }
+    .transaction-item {
+        grid-template-columns: 100px 1fr 100px;
+        gap: 12px;
+        padding: 14px 16px;
+    }
 
-  .transaction-item .value {
-    font-size: 0.95rem;
-  }
+    .transaction-item .value {
+        font-size: 0.95rem;
+    }
 
-  .lancamento-form {
-    padding: 28px;
-  }
+    .lancamento-form {
+        padding: 28px;
+    }
 
-  .login-card {
-    padding: 32px;
-  }
+    .login-card {
+        padding: 32px;
+    }
 }
 
 /* ====================================
@@ -753,165 +754,165 @@ body {
    ==================================== */
 
 @media (max-width: 480px) {
-  .app {
-    padding: 12px;
-  }
+    .app {
+        padding: 12px;
+    }
 
-  .header {
-    padding: 16px;
-    margin-bottom: 16px;
-  }
+    .header {
+        padding: 16px;
+        margin-bottom: 16px;
+    }
 
-  .header h1 {
-    font-size: 1.25rem;
-    margin-bottom: 12px;
-  }
+    .header h1 {
+        font-size: 1.25rem;
+        margin-bottom: 12px;
+    }
 
-  .header-content {
-    flex-direction: column;
-    gap: 12px;
-  }
+    .header-content {
+        flex-direction: column;
+        gap: 12px;
+    }
 
-  .user-section {
-    width: 100%;
-    flex-direction: column;
-    align-items: stretch;
-  }
+    .user-section {
+        width: 100%;
+        flex-direction: column;
+        align-items: stretch;
+    }
 
-  .user-info {
-    text-align: center;
-  }
+    .user-info {
+        text-align: center;
+    }
 
-  .user-avatar {
-    align-self: center;
-  }
+    .user-avatar {
+        align-self: center;
+    }
 
-  .header-actions {
-    width: 100%;
-    flex-direction: column;
-  }
+    .header-actions {
+        width: 100%;
+        flex-direction: column;
+    }
 
-  .btn-action,
-  .btn-logout {
-    width: 100%;
-    justify-content: center;
-  }
+    .btn-action,
+    .btn-logout {
+        width: 100%;
+        justify-content: center;
+    }
 
-  .main {
-    padding: 16px;
-    min-height: auto;
-  }
+    .main {
+        padding: 16px;
+        min-height: auto;
+    }
 
-  .nav {
-    gap: 6px;
-    padding: 8px;
-    margin-bottom: 16px;
-  }
+    .nav {
+        gap: 6px;
+        padding: 8px;
+        margin-bottom: 16px;
+    }
 
-  .nav button {
-    padding: 8px 10px;
-    font-size: 0.75rem;
-    min-height: 40px;
-    flex-shrink: 0;
-  }
+    .nav button {
+        padding: 8px 10px;
+        font-size: 0.75rem;
+        min-height: 40px;
+        flex-shrink: 0;
+    }
 
-  .cards {
-    grid-template-columns: 1fr;
-    gap: 12px;
-  }
+    .cards {
+        grid-template-columns: 1fr;
+        gap: 12px;
+    }
 
-  .card {
-    padding: 16px;
-  }
+    .card {
+        padding: 16px;
+    }
 
-  .card h3 {
-    font-size: 0.7rem;
-    margin-bottom: 8px;
-  }
+    .card h3 {
+        font-size: 0.7rem;
+        margin-bottom: 8px;
+    }
 
-  .card .value {
-    font-size: 1.75rem;
-  }
+    .card .value {
+        font-size: 1.75rem;
+    }
 
-  .dashboard h2 {
-    font-size: 1.25rem;
-    margin-bottom: 16px;
-  }
+    .dashboard h2 {
+        font-size: 1.25rem;
+        margin-bottom: 16px;
+    }
 
-  .transaction-item {
-    grid-template-columns: 1fr;
-    gap: 8px;
-    padding: 12px;
-  }
+    .transaction-item {
+        grid-template-columns: 1fr;
+        gap: 8px;
+        padding: 12px;
+    }
 
-  .transaction-item .value {
-    text-align: left;
-    font-size: 1rem;
-  }
+    .transaction-item .value {
+        text-align: left;
+        font-size: 1rem;
+    }
 
-  .transaction-item .category {
-    font-size: 0.7rem;
-    padding: 4px 8px;
-  }
+    .transaction-item .category {
+        font-size: 0.7rem;
+        padding: 4px 8px;
+    }
 
-  .recent-transactions {
-    padding: 16px;
-    margin-bottom: 16px;
-  }
+    .recent-transactions {
+        padding: 16px;
+        margin-bottom: 16px;
+    }
 
-  .recent-transactions h3 {
-    font-size: 1rem;
-    margin-bottom: 16px;
-  }
+    .recent-transactions h3 {
+        font-size: 1rem;
+        margin-bottom: 16px;
+    }
 
-  .lancamento-form {
-    padding: 20px;
-    max-width: 100%;
-  }
+    .lancamento-form {
+        padding: 20px;
+        max-width: 100%;
+    }
 
-  .lancamento-form h2 {
-    font-size: 1.25rem;
-    margin-bottom: 20px;
-  }
+    .lancamento-form h2 {
+        font-size: 1.25rem;
+        margin-bottom: 20px;
+    }
 
-  .form-group {
-    margin-bottom: 18px;
-  }
+    .form-group {
+        margin-bottom: 18px;
+    }
 
-  .form-group label {
-    font-size: 0.8rem;
-    margin-bottom: 6px;
-  }
+    .form-group label {
+        font-size: 0.8rem;
+        margin-bottom: 6px;
+    }
 
-  .form-group input,
-  .form-group select,
-  .form-group textarea {
-    padding: 12px;
-    font-size: 16px;
-  }
+    .form-group input,
+    .form-group select,
+    .form-group textarea {
+        padding: 12px;
+        font-size: 16px;
+    }
 
-  .btn-submit {
-    padding: 14px;
-    font-size: 0.9rem;
-    min-height: 44px;
-  }
+    .btn-submit {
+        padding: 14px;
+        font-size: 0.9rem;
+        min-height: 44px;
+    }
 
-  .login-card {
-    padding: 24px;
-  }
+    .login-card {
+        padding: 24px;
+    }
 
-  .login-header h1 {
-    font-size: 1.5rem;
-  }
+    .login-header h1 {
+        font-size: 1.5rem;
+    }
 
-  .login-header p {
-    font-size: 0.9rem;
-  }
+    .login-header p {
+        font-size: 0.9rem;
+    }
 
-  .btn-login {
-    padding: 12px;
-    font-size: 0.9rem;
-  }
+    .btn-login {
+        padding: 12px;
+        font-size: 0.9rem;
+    }
 }
 
 /* ====================================
@@ -919,65 +920,65 @@ body {
    ==================================== */
 
 @media (max-width: 360px) {
-  .app {
-    padding: 8px;
-  }
+    .app {
+        padding: 8px;
+    }
 
-  .header {
-    padding: 12px;
-    margin-bottom: 12px;
-  }
+    .header {
+        padding: 12px;
+        margin-bottom: 12px;
+    }
 
-  .header h1 {
-    font-size: 1.1rem;
-  }
+    .header h1 {
+        font-size: 1.1rem;
+    }
 
-  .user-name {
-    font-size: 0.9rem;
-  }
+    .user-name {
+        font-size: 0.9rem;
+    }
 
-  .user-role {
-    font-size: 0.65rem;
-  }
+    .user-role {
+        font-size: 0.65rem;
+    }
 
-  .user-avatar {
-    width: 40px;
-    height: 40px;
-    font-size: 1rem;
-  }
+    .user-avatar {
+        width: 40px;
+        height: 40px;
+        font-size: 1rem;
+    }
 
-  .status-badge {
-    padding: 6px 12px;
-    font-size: 0.75rem;
-  }
+    .status-badge {
+        padding: 6px 12px;
+        font-size: 0.75rem;
+    }
 
-  .btn-action {
-    padding: 8px 10px;
-    font-size: 0.7rem;
-    min-height: 40px;
-  }
+    .btn-action {
+        padding: 8px 10px;
+        font-size: 0.7rem;
+        min-height: 40px;
+    }
 
-  .nav {
-    gap: 4px;
-    padding: 8px;
-  }
+    .nav {
+        gap: 4px;
+        padding: 8px;
+    }
 
-  .nav button {
-    padding: 8px 8px;
-    font-size: 0.7rem;
-    min-height: 38px;
-  }
+    .nav button {
+        padding: 8px 8px;
+        font-size: 0.7rem;
+        min-height: 38px;
+    }
 
-  .card .value {
-    font-size: 1.5rem;
-  }
+    .card .value {
+        font-size: 1.5rem;
+    }
 
-  .transaction-item {
-    gap: 6px;
-    padding: 10px;
-  }
+    .transaction-item {
+        gap: 6px;
+        padding: 10px;
+    }
 
-  .lancamento-form {
-    padding: 16px;
-  }
+    .lancamento-form {
+        padding: 16px;
+    }
 }
