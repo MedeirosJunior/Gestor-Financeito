@@ -216,6 +216,24 @@ const initializeDatabase = async () => {
     await dbRun(`CREATE INDEX IF NOT EXISTS idx_goals_userid ON goals(userId)`);
 
     console.log('✅ Banco SQLite inicializado com sucesso!');
+
+    // Criar usuário admin se não existir
+    try {
+      const adminExists = await dbGet('SELECT id FROM users WHERE email = ?', ['junior395@gmail.com']);
+
+      if (!adminExists) {
+        await dbRun(
+          'INSERT INTO users (name, email, password) VALUES (?, ?, ?)',
+          ['Administrador', 'junior395@gmail.com', 'j991343519*/*']
+        );
+        console.log('👑 Usuário admin criado com sucesso!');
+      } else {
+        console.log('👑 Usuário admin já existe');
+      }
+    } catch (adminError) {
+      console.error('Erro ao criar/verificar admin:', adminError.message);
+    }
+
   } catch (error) {
     console.error('❌ Erro ao inicializar banco:', error);
     throw error;
@@ -246,28 +264,6 @@ initializeDatabase().catch(error => {
   console.error('❌ Falha crítica na inicialização do banco:', error);
   process.exit(1);
 });
-
-// Função para criar usuário admin
-async function createAdminUser() {
-  try {
-    const result = await dbGet('SELECT id FROM users WHERE email = ?', ['junior395@gmail.com']);
-
-    if (!result) {
-      await dbRun(
-        'INSERT INTO users (name, email, password) VALUES (?, ?, ?)',
-        ['Administrador', 'junior395@gmail.com', 'j991343519*/*']
-      );
-      console.log('👑 Usuário admin criado com sucesso!');
-    } else {
-      console.log('👑 Usuário admin já existe');
-    }
-  } catch (error) {
-    console.error('Erro ao verificar/criar admin:', error);
-  }
-}
-
-// Criar usuário admin após inicialização
-setTimeout(() => createAdminUser(), 2000);
 
 // Rotas para transações
 app.get('/transactions', async (req, res) => {
@@ -505,10 +501,39 @@ app.get('/admin/stats', async (req, res) => {
 // Rota para verificar usuários cadastrados (debug)
 app.get('/debug/users', async (req, res) => {
   try {
-    const result = await dbAll('SELECT id, name, email FROM users');
-    res.json(result);
+    const result = await dbAll('SELECT id, name, email, password FROM users');
+    res.json({
+      total: result.length,
+      users: result
+    });
   } catch (error) {
     console.error('Erro ao buscar usuários:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Rota para inicializar/recriar usuário admin (debug)
+app.post('/debug/init-admin', async (req, res) => {
+  try {
+    // Deletar usuário admin existente
+    await dbRun('DELETE FROM users WHERE email = ?', ['junior395@gmail.com']);
+
+    // Criar novo usuário admin
+    await dbRun(
+      'INSERT INTO users (name, email, password) VALUES (?, ?, ?)',
+      ['Administrador', 'junior395@gmail.com', 'j991343519*/*']
+    );
+
+    console.log('👑 Usuário admin reiniciado com sucesso!');
+    res.json({
+      message: 'Usuário admin criado com sucesso',
+      user: {
+        email: 'junior395@gmail.com',
+        password: 'j991343519*/*'
+      }
+    });
+  } catch (error) {
+    console.error('Erro ao criar admin:', error);
     res.status(500).json({ error: error.message });
   }
 });
