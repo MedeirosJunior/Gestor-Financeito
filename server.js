@@ -11,10 +11,10 @@ const port = process.env.PORT || 10000;
 
 let dbRun, dbGet, dbAll;
 
-const tursoUrl = process.env.TURSO_DATABASE_URL;
+const tursoUrl = process.env.TURSO_DATABASE_URL || process.env.DATABASE_URL;
 const tursoToken = process.env.TURSO_AUTH_TOKEN;
 
-if (tursoUrl) {
+if (tursoUrl && tursoUrl.startsWith('libsql://')) {
   // ---- TURSO (produção) ----
   const { createClient } = require('@libsql/client');
   const db = createClient({ url: tursoUrl, authToken: tursoToken || '' });
