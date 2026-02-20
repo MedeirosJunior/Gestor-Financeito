@@ -1982,7 +1982,7 @@ const Dashboard = React.memo(({ transactions, dueAlerts, budgets = [], goals = [
     const deadline = new Date(g.deadline + 'T00:00:00');
     const diff = Math.ceil((deadline - now) / 86400000);
     return diff >= 0 && diff <= 30 && parseFloat(g.current_amount || 0) < parseFloat(g.target_amount);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }), [goals]);
 
   return (

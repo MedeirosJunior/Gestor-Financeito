@@ -3320,12 +3320,14 @@ button.loading .spinner {
   text-transform: uppercase;
   margin-bottom: 6px;
 }
+
 .card-value {
   font-size: 1.7rem;
   font-weight: 800;
   margin-bottom: 4px;
   line-height: 1.1;
 }
+
 .card-trend {
   font-size: 12px;
   font-weight: 600;
@@ -3336,6 +3338,7 @@ button.loading .spinner {
 .cat-report-row {
   margin-bottom: 14px;
 }
+
 .cat-report-label {
   display: flex;
   justify-content: space-between;
@@ -3344,10 +3347,12 @@ button.loading .spinner {
   margin-bottom: 5px;
   color: #374151;
 }
+
 .cat-report-value small {
   font-weight: 400;
   color: #64748b;
 }
+
 .cat-report-bar-wrap {
   width: 100%;
   height: 10px;
@@ -3355,6 +3360,7 @@ button.loading .spinner {
   border-radius: 10px;
   overflow: hidden;
 }
+
 .cat-report-bar {
   height: 100%;
   border-radius: 10px;
