@@ -3310,3 +3310,55 @@ button.loading .spinner {
   font-weight: 600;
   margin-top: 6px;
 }
+
+/* ===== DASHBOARD - CARDS COM TENDÊNCIA ===== */
+.card-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  opacity: 0.75;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+.card-value {
+  font-size: 1.7rem;
+  font-weight: 800;
+  margin-bottom: 4px;
+  line-height: 1.1;
+}
+.card-trend {
+  font-size: 12px;
+  font-weight: 600;
+  opacity: 0.9;
+}
+
+/* ===== RELATÓRIOS - BARRAS DE CATEGORIA ===== */
+.cat-report-row {
+  margin-bottom: 14px;
+}
+.cat-report-label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 5px;
+  color: #374151;
+}
+.cat-report-value small {
+  font-weight: 400;
+  color: #64748b;
+}
+.cat-report-bar-wrap {
+  width: 100%;
+  height: 10px;
+  background: #f1f5f9;
+  border-radius: 10px;
+  overflow: hidden;
+}
+.cat-report-bar {
+  height: 100%;
+  border-radius: 10px;
+  background: linear-gradient(90deg, #667eea, #764ba2);
+  transition: width 0.5s ease;
+  min-width: 4px;
+}

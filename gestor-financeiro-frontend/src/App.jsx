@@ -942,6 +942,16 @@ function App() {
     if (res.ok) { await fetchBudgets(); toast.success('Orçamento removido!'); }
   }, [fetchBudgets]);
 
+  const updateBudget = useCallback(async (id, data) => {
+    const res = await fetch(`${config.API_URL}/budgets/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+    if (res.ok) { await fetchBudgets(); toast.success('Orçamento atualizado!'); return true; }
+    return false;
+  }, [fetchBudgets]);
+
   // ============ CONTAS ============
   const fetchWallets = useCallback(async () => {
     if (!currentUser?.email) return;
@@ -1174,6 +1184,7 @@ function App() {
               transactions={transactions}
               dueAlerts={dueAlerts}
               budgets={budgets}
+              goals={goals}
               categories={categories}
             />
           )}
@@ -1226,6 +1237,7 @@ function App() {
               transactions={transactions}
               categories={categories}
               onAdd={addBudget}
+              onUpdate={updateBudget}
               onDelete={deleteBudget}
             />
           )}
@@ -1905,8 +1917,11 @@ const CategoryManagement = React.memo(({
 });
 
 // Dashboard com resumo financeiro otimizado
-const Dashboard = React.memo(({ transactions, dueAlerts, budgets = [], categories }) => {
-  const currentMonth = new Date().toISOString().slice(0, 7);
+const Dashboard = React.memo(({ transactions, dueAlerts, budgets = [], goals = [], categories }) => {
+  const now = new Date();
+  const currentMonth = now.toISOString().slice(0, 7);
+  const prevDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const prevMonth = prevDate.toISOString().slice(0, 7);
 
   // Mapeamento ID→nome para calcular gastos por orçamento
   const categoriasDesp = categories?.despesa || [
@@ -1918,58 +1933,92 @@ const Dashboard = React.memo(({ transactions, dueAlerts, budgets = [], categorie
   const getCatIds = (name) =>
     categoriasDesp.filter(c => c.name.toLowerCase() === name.toLowerCase()).map(c => c.id);
 
-  const now = new Date();
-
-  // Otimizar filtro de transações mensais com useMemo
+  // Transações do mês atual
   const monthlyTransactions = useMemo(() =>
     transactions.filter(t => t.date.startsWith(currentMonth)),
     [transactions, currentMonth]
   );
 
-  // Otimizar cálculo de entradas com useMemo
+  // Transações do mês anterior
+  const prevMonthTransactions = useMemo(() =>
+    transactions.filter(t => t.date.startsWith(prevMonth)),
+    [transactions, prevMonth]
+  );
+
   const totalEntradas = useMemo(() =>
-    monthlyTransactions
-      .filter(t => t.type === 'entrada')
-      .reduce((sum, t) => sum + parseFloat(t.value), 0),
+    monthlyTransactions.filter(t => t.type === 'entrada').reduce((s, t) => s + parseFloat(t.value), 0),
     [monthlyTransactions]
   );
-
-  // Otimizar cálculo de despesas com useMemo
   const totalDespesas = useMemo(() =>
-    monthlyTransactions
-      .filter(t => t.type === 'despesa')
-      .reduce((sum, t) => sum + parseFloat(t.value), 0),
+    monthlyTransactions.filter(t => t.type === 'despesa').reduce((s, t) => s + parseFloat(t.value), 0),
     [monthlyTransactions]
   );
+  const saldo = useMemo(() => totalEntradas - totalDespesas, [totalEntradas, totalDespesas]);
 
-  // Otimizar cálculo de saldo com useMemo
-  const saldo = useMemo(() =>
-    totalEntradas - totalDespesas,
-    [totalEntradas, totalDespesas]
+  const prevEntradas = useMemo(() =>
+    prevMonthTransactions.filter(t => t.type === 'entrada').reduce((s, t) => s + parseFloat(t.value), 0),
+    [prevMonthTransactions]
   );
+  const prevDespesas = useMemo(() =>
+    prevMonthTransactions.filter(t => t.type === 'despesa').reduce((s, t) => s + parseFloat(t.value), 0),
+    [prevMonthTransactions]
+  );
+
+  const pctChange = (curr, prev) => {
+    if (prev === 0) return curr > 0 ? '+100%' : '—';
+    const p = ((curr - prev) / prev * 100);
+    return (p >= 0 ? '+' : '') + p.toFixed(0) + '%';
+  };
+  const pctColor = (curr, prev, inverse = false) => {
+    if (prev === 0) return '#64748b';
+    const up = curr >= prev;
+    if (inverse) return up ? '#e74c3c' : '#2ecc71';
+    return up ? '#2ecc71' : '#e74c3c';
+  };
+
+  // Alertas de metas próximas do prazo (≤30 dias)
+  const goalAlerts = useMemo(() => goals.filter(g => {
+    if (!g.deadline) return false;
+    const deadline = new Date(g.deadline + 'T00:00:00');
+    const diff = Math.ceil((deadline - now) / 86400000);
+    return diff >= 0 && diff <= 30 && parseFloat(g.current_amount || 0) < parseFloat(g.target_amount);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [goals]);
 
   return (
     <div className="dashboard">
-      <h2>📊 Dashboard - {new Date().toLocaleDateString('pt-BR', { year: 'numeric', month: 'long' })}</h2>
+      <h2>📊 Dashboard — {now.toLocaleDateString('pt-BR', { year: 'numeric', month: 'long' })}</h2>
 
+      {/* Cards com comparativo do mês anterior */}
       <div className="cards">
         <div className="card entradas">
-          <h3>💵 Entradas</h3>
-          <p>R$ {totalEntradas.toFixed(2)}</p>
+          <div className="card-label">💵 ENTRADAS</div>
+          <div className="card-value">R$ {totalEntradas.toFixed(2)}</div>
+          {prevEntradas > 0 || totalEntradas > 0 ? (
+            <div className="card-trend" style={{ color: pctColor(totalEntradas, prevEntradas) }}>
+              {pctChange(totalEntradas, prevEntradas)} vs mês anterior
+            </div>
+          ) : null}
         </div>
-
         <div className="card despesas">
-          <h3>💸 Despesas</h3>
-          <p>R$ {totalDespesas.toFixed(2)}</p>
+          <div className="card-label">💸 DESPESAS</div>
+          <div className="card-value">R$ {totalDespesas.toFixed(2)}</div>
+          {prevDespesas > 0 || totalDespesas > 0 ? (
+            <div className="card-trend" style={{ color: pctColor(totalDespesas, prevDespesas, true) }}>
+              {pctChange(totalDespesas, prevDespesas)} vs mês anterior
+            </div>
+          ) : null}
         </div>
-
         <div className={`card saldo ${saldo >= 0 ? 'positive' : 'negative'}`}>
-          <h3>💰 Saldo</h3>
-          <p>R$ {saldo.toFixed(2)}</p>
+          <div className="card-label">🔥 SALDO</div>
+          <div className="card-value">R$ {saldo.toFixed(2)}</div>
+          <div className="card-trend" style={{ color: saldo >= 0 ? '#2ecc71' : '#e74c3c' }}>
+            {saldo >= 0 ? '✅ Positivo' : '⚠️ Negativo'}
+          </div>
         </div>
       </div>
 
-      {/* Alertas de Vencimento */}
+      {/* Alertas de Vencimento de Recorrentes */}
       {dueAlerts.length > 0 && (
         <div className="due-alerts">
           <h3>⚠️ Alertas de Vencimento</h3>
@@ -1987,6 +2036,31 @@ const Dashboard = React.memo(({ transactions, dueAlerts, budgets = [], categorie
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Alertas de Metas com prazo próximo */}
+      {goalAlerts.length > 0 && (
+        <div className="due-alerts" style={{ borderLeftColor: '#8b5cf6' }}>
+          <h3>🎯 Metas com Prazo Próximo</h3>
+          {goalAlerts.map(g => {
+            const curr = parseFloat(g.current_amount || 0);
+            const target = parseFloat(g.target_amount);
+            const diff = Math.ceil((new Date(g.deadline + 'T00:00:00') - now) / 86400000);
+            const falta = target - curr;
+            return (
+              <div key={g.id} className="alert-item due-soon">
+                <div className="alert-info">
+                  <span className="alert-description">{g.name}</span>
+                  <span className="alert-value">Falta R$ {falta.toFixed(2)}</span>
+                </div>
+                <div className="alert-date">
+                  <span className="alert-status due-soon">🟡 Prazo em {diff} dia(s)</span>
+                  <span className="alert-due-date">{new Date(g.deadline + 'T00:00:00').toLocaleDateString('pt-BR')}</span>
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
 
@@ -2242,9 +2316,11 @@ function DespesasRecorrentes({ expenses, onAdd, onDelete, onPay, onUpdate }) {
 
 
 // Componente Orçamentos
-function Orcamentos({ budgets, transactions, categories, onAdd, onDelete }) {
+function Orcamentos({ budgets, transactions, categories, onAdd, onUpdate, onDelete }) {
   const [form, setForm] = useState({ category: '', limit_value: '', period: 'monthly' });
   const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+  const [editLimit, setEditLimit] = useState('');
 
   // Categorias de despesa disponíveis (padrão + customizadas)
   const categoriasDesp = (categories?.despesa || [
@@ -2337,8 +2413,19 @@ function Orcamentos({ budgets, transactions, categories, onAdd, onDelete }) {
                     <h4>{catMeta?.icon ? `${catMeta.icon} ` : ''}{b.category}</h4>
                     <span className="period-badge">{periodos.find(p => p.value === b.period)?.label}</span>
                   </div>
+                  <button className="edit-btn" onClick={() => { setEditingId(b.id); setEditLimit(b.limit_value); }} title="Editar limite">✏️</button>
                   <button className="delete-btn" onClick={() => onDelete(b.id)}>🗑️</button>
                 </div>
+                {editingId === b.id && (
+                  <form onSubmit={async e => { e.preventDefault(); const ok = await onUpdate(b.id, { limit_value: parseFloat(editLimit) }); if (ok) setEditingId(null); }}
+                    style={{ display: 'flex', gap: '8px', alignItems: 'center', marginTop: '8px' }}>
+                    <label style={{ fontSize: '13px', color: '#64748b' }}>Novo limite:</label>
+                    <input type="number" step="0.01" value={editLimit} onChange={e => setEditLimit(e.target.value)}
+                      style={{ width: '110px', padding: '4px 8px', borderRadius: '6px', border: '1px solid #cbd5e1' }} />
+                    <button type="submit" className="submit-btn" style={{ padding: '4px 12px' }}>💾</button>
+                    <button type="button" className="cancel-btn" style={{ padding: '4px 10px' }} onClick={() => setEditingId(null)}>✕</button>
+                  </form>
+                )}
                 <div className="budget-amounts">
                   <span className={`spent ${overBudget ? 'text-danger' : ''}`}>Gasto: R$ {spent.toFixed(2)}</span>
                   <span className="limit">Limite: R$ {limit.toFixed(2)}</span>
@@ -2894,14 +2981,27 @@ function Relatorios({ transactions, loadingExport, setLoadingExport }) {
       </div>
 
       <div className="categories-report">
-        <h3>Gastos por Categoria</h3>
-        {Object.entries(categoriesData).map(([category, value]) => (
-          <div key={category} className="category-item">
-            <span>{category}</span>
-            <span>R$ {value.toFixed(2)}</span>
-            <span>({((value / totalDespesas) * 100).toFixed(1)}%)</span>
-          </div>
-        ))}
+        <h3>📊 Gastos por Categoria</h3>
+        {Object.keys(categoriesData).length === 0 ? (
+          <p className="empty-message">Nenhuma despesa neste mês</p>
+        ) : (
+          Object.entries(categoriesData)
+            .sort((a, b) => b[1] - a[1])
+            .map(([category, value]) => {
+              const pct = totalDespesas > 0 ? (value / totalDespesas) * 100 : 0;
+              return (
+                <div key={category} className="cat-report-row">
+                  <div className="cat-report-label">
+                    <span>{category}</span>
+                    <span className="cat-report-value">R$ {value.toFixed(2)} <small>({pct.toFixed(1)}%)</small></span>
+                  </div>
+                  <div className="cat-report-bar-wrap">
+                    <div className="cat-report-bar" style={{ width: `${pct}%` }} />
+                  </div>
+                </div>
+              );
+            })
+        )}
       </div>
     </div>
   );
