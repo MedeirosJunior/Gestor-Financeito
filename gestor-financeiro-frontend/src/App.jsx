@@ -1382,6 +1382,10 @@ function App() {
               onUpdate={updateWallet}
               onDelete={deleteWallet}
               onTransfer={transferBetweenWallets}
+              transactions={transactions}
+              onUpdateTransaction={updateTransaction}
+              onDeleteTransaction={deleteTransaction}
+              categories={categories}
             />
           )}
           {activeTab === 'metas' && (
@@ -2615,13 +2619,16 @@ function Orcamentos({ budgets, transactions, categories, onAdd, onUpdate, onDele
 }
 
 // Componente Contas (Carteiras)
-function Contas({ wallets, onAdd, onUpdate, onDelete, onTransfer }) {
+function Contas({ wallets, onAdd, onUpdate, onDelete, onTransfer, transactions = [], onUpdateTransaction, onDeleteTransaction, categories = { entrada: [], despesa: [] } }) {
   const [form, setForm] = useState({ name: '', type: 'corrente', balance: '' });
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [editBalance, setEditBalance] = useState('');
   const [showTransfer, setShowTransfer] = useState(false);
   const [transferForm, setTransferForm] = useState({ fromId: '', toId: '', amount: '' });
+  const [selectedWalletId, setSelectedWalletId] = useState(null);
+  const [editingTxId, setEditingTxId] = useState(null);
+  const [editingTx, setEditingTx] = useState({});
 
   const tipos = [
     { value: 'corrente', label: '🏦 Conta Corrente' },
@@ -2654,6 +2661,92 @@ function Contas({ wallets, onAdd, onUpdate, onDelete, onTransfer }) {
     onTransfer(fromId, toId, parseFloat(transferForm.amount));
     setShowTransfer(false);
     setTransferForm({ fromId: '', toId: '', amount: '' });
+  };
+
+  const handleSelectWallet = (walletId) => {
+    setSelectedWalletId(prev => prev === walletId ? null : walletId);
+    setEditingTxId(null);
+  };
+
+  const startEditTx = (tx) => {
+    setEditingTxId(tx.id);
+    setEditingTx({ description: tx.description, value: tx.value, date: tx.date, category: tx.category || '' });
+  };
+
+  const handleSaveTx = async (tx) => {
+    if (!editingTx.description || !editingTx.value || !editingTx.date) {
+      toast.error('Preencha todos os campos!'); return;
+    }
+    const updated = { ...tx, description: editingTx.description, value: parseFloat(editingTx.value), date: editingTx.date, category: editingTx.category };
+    await onUpdateTransaction(tx.id, updated, tx);
+    setEditingTxId(null);
+  };
+
+  const selectedWallet = wallets.find(w => w.id === selectedWalletId);
+  const walletTransactions = transactions.filter(t => t.wallet_id && parseInt(t.wallet_id) === selectedWalletId);
+  const entradas = walletTransactions.filter(t => t.type === 'entrada').sort((a, b) => new Date(b.date) - new Date(a.date));
+  const saidas = walletTransactions.filter(t => t.type === 'despesa').sort((a, b) => new Date(b.date) - new Date(a.date));
+  const totalEntradas = entradas.reduce((s, t) => s + parseFloat(t.value || 0), 0);
+  const totalSaidas = saidas.reduce((s, t) => s + parseFloat(t.value || 0), 0);
+
+  const allCategories = [...(categories.entrada || []), ...(categories.despesa || [])];
+  const getCatLabel = (catId, type) => {
+    const list = type === 'entrada' ? (categories.entrada || []) : (categories.despesa || []);
+    return list.find(c => c.id === catId || c.name === catId)?.name || catId || '';
+  };
+
+  const renderTxRow = (tx) => {
+    const isEditing = editingTxId === tx.id;
+    const catList = tx.type === 'entrada' ? (categories.entrada || []) : (categories.despesa || []);
+    return (
+      <div key={tx.id} className={`wallet-tx-row ${tx.type}`}>
+        {isEditing ? (
+          <div className="wallet-tx-edit">
+            <input
+              type="text"
+              placeholder="Descrição"
+              value={editingTx.description}
+              onChange={e => setEditingTx(p => ({ ...p, description: e.target.value }))}
+            />
+            <input
+              type="number"
+              step="0.01"
+              placeholder="Valor"
+              value={editingTx.value}
+              onChange={e => setEditingTx(p => ({ ...p, value: e.target.value }))}
+            />
+            <input
+              type="date"
+              value={editingTx.date}
+              onChange={e => setEditingTx(p => ({ ...p, date: e.target.value }))}
+            />
+            <select value={editingTx.category} onChange={e => setEditingTx(p => ({ ...p, category: e.target.value }))}>
+              <option value="">Categoria</option>
+              {catList.map(c => <option key={c.id} value={c.id}>{c.icon} {c.name}</option>)}
+            </select>
+            <div className="wallet-tx-actions">
+              <button className="submit-btn" style={{ padding: '4px 12px' }} onClick={() => handleSaveTx(tx)}>💾 Salvar</button>
+              <button className="cancel-btn" style={{ padding: '4px 10px' }} onClick={() => setEditingTxId(null)}>✕</button>
+            </div>
+          </div>
+        ) : (
+          <>
+            <div className="wallet-tx-info">
+              <span className="wallet-tx-desc">{tx.description}</span>
+              <span className="wallet-tx-cat">{getCatLabel(tx.category, tx.type)}</span>
+              <span className="wallet-tx-date">{tx.date ? new Date(tx.date + 'T00:00:00').toLocaleDateString('pt-BR') : ''}</span>
+            </div>
+            <div className="wallet-tx-right">
+              <span className={`wallet-tx-value ${tx.type === 'entrada' ? 'text-success' : 'text-danger'}`}>
+                {tx.type === 'entrada' ? '+' : '-'} R$ {parseFloat(tx.value || 0).toFixed(2)}
+              </span>
+              <button className="edit-btn" onClick={() => startEditTx(tx)} title="Editar transação">✏️</button>
+              <button className="delete-btn" onClick={() => onDeleteTransaction(tx.id)} title="Excluir transação">🗑️</button>
+            </div>
+          </>
+        )}
+      </div>
+    );
   };
 
   return (
@@ -2737,34 +2830,81 @@ function Contas({ wallets, onAdd, onUpdate, onDelete, onTransfer }) {
           <p className="empty-message">Nenhuma conta cadastrada</p>
         ) : (
           wallets.map(w => (
-            <div key={w.id} className="wallet-card">
-              <div className="wallet-info">
-                <span className="wallet-icon">{tipos.find(t => t.value === w.type)?.label?.split(' ')[0] || '💳'}</span>
-                <div>
-                  <h4>{w.name}</h4>
-                  <small>{tipos.find(t => t.value === w.type)?.label?.split(' ').slice(1).join(' ') || w.type}</small>
+            <React.Fragment key={w.id}>
+              <div
+                className={`wallet-card${selectedWalletId === w.id ? ' wallet-card--selected' : ''}`}
+                style={{ cursor: 'pointer' }}
+                onClick={() => handleSelectWallet(w.id)}
+              >
+                <div className="wallet-info">
+                  <span className="wallet-icon">{tipos.find(t => t.value === w.type)?.label?.split(' ')[0] || '💳'}</span>
+                  <div>
+                    <h4>{w.name}</h4>
+                    <small>{tipos.find(t => t.value === w.type)?.label?.split(' ').slice(1).join(' ') || w.type}</small>
+                  </div>
+                </div>
+                <div className="wallet-balance" onClick={e => e.stopPropagation()}>
+                  {editingId === w.id ? (
+                    <form onSubmit={handleUpdateBalance} style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                      <input type="number" step="0.01" value={editBalance}
+                        onChange={e => setEditBalance(e.target.value)}
+                        style={{ width: '100px', padding: '4px 8px', borderRadius: '6px', border: '1px solid #ccc' }} />
+                      <button type="submit" className="submit-btn" style={{ padding: '4px 10px' }}>💾</button>
+                      <button type="button" className="cancel-btn" style={{ padding: '4px 10px' }} onClick={() => setEditingId(null)}>✕</button>
+                    </form>
+                  ) : (
+                    <>
+                      <span className={`balance-value ${parseFloat(w.balance) >= 0 ? 'text-success' : 'text-danger'}`}>
+                        R$ {parseFloat(w.balance || 0).toFixed(2)}
+                      </span>
+                      <button className="edit-btn" onClick={() => { setEditingId(w.id); setEditBalance(w.balance); }} title="Editar saldo">✏️</button>
+                      <button className="delete-btn" onClick={() => onDelete(w.id)} title="Excluir">🗑️</button>
+                      <span className="wallet-expand-hint" title={selectedWalletId === w.id ? 'Fechar' : 'Ver transações'}>
+                        {selectedWalletId === w.id ? '▲' : '▼'}
+                      </span>
+                    </>
+                  )}
                 </div>
               </div>
-              <div className="wallet-balance">
-                {editingId === w.id ? (
-                  <form onSubmit={handleUpdateBalance} style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                    <input type="number" step="0.01" value={editBalance}
-                      onChange={e => setEditBalance(e.target.value)}
-                      style={{ width: '100px', padding: '4px 8px', borderRadius: '6px', border: '1px solid #ccc' }} />
-                    <button type="submit" className="submit-btn" style={{ padding: '4px 10px' }}>💾</button>
-                    <button type="button" className="cancel-btn" style={{ padding: '4px 10px' }} onClick={() => setEditingId(null)}>✕</button>
-                  </form>
-                ) : (
-                  <>
-                    <span className={`balance-value ${parseFloat(w.balance) >= 0 ? 'text-success' : 'text-danger'}`}>
-                      R$ {parseFloat(w.balance || 0).toFixed(2)}
-                    </span>
-                    <button className="edit-btn" onClick={() => { setEditingId(w.id); setEditBalance(w.balance); }} title="Editar saldo">✏️</button>
-                    <button className="delete-btn" onClick={() => onDelete(w.id)} title="Excluir">🗑️</button>
-                  </>
-                )}
-              </div>
-            </div>
+
+              {selectedWalletId === w.id && (
+                <div className="wallet-detail-panel">
+                  <div className="wallet-detail-summary">
+                    <div className="wallet-detail-stat entrada">
+                      <span>💵 Total Entradas</span>
+                      <strong className="text-success">+ R$ {totalEntradas.toFixed(2)}</strong>
+                      <small>{entradas.length} transação(ões)</small>
+                    </div>
+                    <div className="wallet-detail-stat saida">
+                      <span>💸 Total Saídas</span>
+                      <strong className="text-danger">- R$ {totalSaidas.toFixed(2)}</strong>
+                      <small>{saidas.length} transação(ões)</small>
+                    </div>
+                  </div>
+
+                  {walletTransactions.length === 0 ? (
+                    <p className="empty-message" style={{ padding: '16px', textAlign: 'center' }}>
+                      Nenhuma transação vinculada a esta conta
+                    </p>
+                  ) : (
+                    <div className="wallet-tx-columns">
+                      <div className="wallet-tx-group">
+                        <h4 className="wallet-tx-group-title entrada">💵 Entradas</h4>
+                        {entradas.length === 0
+                          ? <p className="wallet-tx-empty">Sem entradas</p>
+                          : entradas.map(renderTxRow)}
+                      </div>
+                      <div className="wallet-tx-group">
+                        <h4 className="wallet-tx-group-title saida">💸 Saídas</h4>
+                        {saidas.length === 0
+                          ? <p className="wallet-tx-empty">Sem saídas</p>
+                          : saidas.map(renderTxRow)}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </React.Fragment>
           ))
         )}
       </div>

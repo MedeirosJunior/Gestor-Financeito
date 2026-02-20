@@ -3472,3 +3472,205 @@ button.loading .spinner {
   color: #8b5cf6;
   font-weight: 500;
 }
+
+/* ===== DETALHES DA CONTA — TRANSAÇÕES ===== */
+.wallet-card--selected {
+  border-color: #6366f1;
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.25);
+}
+
+.wallet-expand-hint {
+  font-size: 12px;
+  color: #94a3b8;
+  margin-left: 4px;
+  user-select: none;
+}
+
+.wallet-detail-panel {
+  background: var(--card-bg, #f8fafc);
+  border: 1px solid #d1d5db;
+  border-top: none;
+  border-radius: 0 0 12px 12px;
+  padding: 16px;
+  margin-top: -4px;
+  animation: fadeIn 0.2s ease;
+}
+
+.wallet-detail-summary {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.wallet-detail-stat {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px 16px;
+  border-radius: 10px;
+  font-size: 13px;
+}
+
+.wallet-detail-stat.entrada {
+  background: #f0fdf4;
+  border-left: 3px solid #22c55e;
+}
+
+.wallet-detail-stat.saida {
+  background: #fef2f2;
+  border-left: 3px solid #ef4444;
+}
+
+.wallet-detail-stat strong {
+  font-size: 17px;
+}
+
+.wallet-detail-stat small {
+  color: #64748b;
+}
+
+.wallet-tx-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+@media (max-width: 700px) {
+  .wallet-tx-columns {
+    grid-template-columns: 1fr;
+  }
+
+  .wallet-detail-summary {
+    flex-direction: column;
+  }
+}
+
+.wallet-tx-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.wallet-tx-group-title {
+  font-size: 13px;
+  font-weight: 700;
+  margin: 0 0 8px;
+  padding-bottom: 6px;
+  border-bottom: 2px solid;
+}
+
+.wallet-tx-group-title.entrada {
+  color: #16a34a;
+  border-color: #22c55e;
+}
+
+.wallet-tx-group-title.saida {
+  color: #dc2626;
+  border-color: #ef4444;
+}
+
+.wallet-tx-empty {
+  font-size: 12px;
+  color: #94a3b8;
+  padding: 8px 0;
+}
+
+.wallet-tx-row {
+  background: var(--card-bg, #fff);
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 8px 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.wallet-tx-row.entrada {
+  border-left: 3px solid #22c55e;
+}
+
+.wallet-tx-row.despesa {
+  border-left: 3px solid #ef4444;
+}
+
+.wallet-tx-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.wallet-tx-desc {
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 160px;
+}
+
+.wallet-tx-cat {
+  font-size: 11px;
+  color: #6b7280;
+}
+
+.wallet-tx-date {
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.wallet-tx-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.wallet-tx-value {
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.wallet-tx-edit {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  width: 100%;
+  align-items: center;
+}
+
+.wallet-tx-edit input,
+.wallet-tx-edit select {
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid #d1d5db;
+  font-size: 12px;
+  background: var(--input-bg, #fff);
+  color: var(--text-color, #1e293b);
+}
+
+.wallet-tx-edit input[type="text"] {
+  flex: 1;
+  min-width: 100px;
+}
+
+.wallet-tx-edit input[type="number"] {
+  width: 90px;
+}
+
+.wallet-tx-edit input[type="date"] {
+  width: 130px;
+}
+
+.wallet-tx-edit select {
+  flex: 1;
+  min-width: 110px;
+}
+
+.wallet-tx-actions {
+  display: flex;
+  gap: 4px;
+}
