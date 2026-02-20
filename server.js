@@ -840,6 +840,25 @@ app.delete('/wallets/:id', async (req, res) => {
   }
 });
 
+// Recalcular saldo de uma conta a partir das transações vinculadas
+app.post('/wallets/:id/recalculate', async (req, res) => {
+  const { id } = req.params;
+  try {
+    const rows = await dbAll(
+      "SELECT type, value FROM transactions WHERE wallet_id = ?",
+      [id]
+    );
+    const balance = rows.reduce((sum, t) => {
+      return sum + (t.type === 'entrada' ? parseFloat(t.value) : -parseFloat(t.value));
+    }, 0);
+    await dbRun('UPDATE wallets SET balance = ? WHERE id = ?', [balance, id]);
+    res.json({ balance, message: 'Saldo recalculado com sucesso' });
+  } catch (error) {
+    console.error('Erro ao recalcular saldo:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ============ ROTAS DE METAS ============
 app.get('/goals', async (req, res) => {
   const { userId } = req.query;

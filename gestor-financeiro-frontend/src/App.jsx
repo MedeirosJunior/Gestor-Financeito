@@ -2629,6 +2629,32 @@ function Contas({ wallets, onAdd, onUpdate, onDelete, onTransfer, transactions =
   const [selectedWalletId, setSelectedWalletId] = useState(null);
   const [editingTxId, setEditingTxId] = useState(null);
   const [editingTx, setEditingTx] = useState({});
+  const [recalculating, setRecalculating] = useState(null);
+
+  // Saldo calculado pelas transações de cada carteira
+  const calcBalanceFromTx = (walletId) => {
+    return transactions
+      .filter(t => t.wallet_id && parseInt(t.wallet_id) === walletId)
+      .reduce((sum, t) => sum + (t.type === 'entrada' ? parseFloat(t.value) : -parseFloat(t.value)), 0);
+  };
+
+  const handleRecalculate = async (walletId) => {
+    setRecalculating(walletId);
+    try {
+      const res = await fetch(`${config.API_URL}/wallets/${walletId}/recalculate`, { method: 'POST' });
+      if (res.ok) {
+        const data = await res.json();
+        onUpdate(walletId, { balance: data.balance });
+        toast.success('Saldo recalculado e corrigido!');
+      } else {
+        toast.error('Erro ao recalcular saldo');
+      }
+    } catch (e) {
+      toast.error('Erro de conexão ao recalcular');
+    } finally {
+      setRecalculating(null);
+    }
+  };
 
   const tipos = [
     { value: 'corrente', label: '🏦 Conta Corrente' },
@@ -2851,16 +2877,41 @@ function Contas({ wallets, onAdd, onUpdate, onDelete, onTransfer, transactions =
                       <button type="button" className="cancel-btn" style={{ padding: '4px 10px' }} onClick={() => setEditingId(null)}>✕</button>
                     </form>
                   ) : (
-                    <>
-                      <span className={`balance-value ${parseFloat(w.balance) >= 0 ? 'text-success' : 'text-danger'}`}>
-                        R$ {parseFloat(w.balance || 0).toFixed(2)}
-                      </span>
-                      <button className="edit-btn" onClick={() => { setEditingId(w.id); setEditBalance(w.balance); }} title="Editar saldo">✏️</button>
-                      <button className="delete-btn" onClick={() => onDelete(w.id)} title="Excluir">🗑️</button>
-                      <span className="wallet-expand-hint" title={selectedWalletId === w.id ? 'Fechar' : 'Ver transações'}>
-                        {selectedWalletId === w.id ? '▲' : '▼'}
-                      </span>
-                    </>
+                    (() => {
+                        const calcBal = calcBalanceFromTx(w.id);
+                        const storedBal = parseFloat(w.balance || 0);
+                        const hasDiscrepancy = Math.abs(calcBal - storedBal) > 0.001;
+                        return (
+                          <>
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '2px' }}>
+                              <span className={`balance-value ${storedBal >= 0 ? 'text-success' : 'text-danger'}`}>
+                                R$ {storedBal.toFixed(2)}
+                              </span>
+                              {hasDiscrepancy && (
+                                <span style={{ fontSize: '11px', color: '#f59e0b', fontWeight: 600 }}>
+                                  ⚠️ calculado: R$ {calcBal.toFixed(2)}
+                                </span>
+                              )}
+                            </div>
+                            {hasDiscrepancy && (
+                              <button
+                                className="submit-btn"
+                                style={{ padding: '4px 10px', fontSize: '12px', background: '#f59e0b' }}
+                                onClick={() => handleRecalculate(w.id)}
+                                disabled={recalculating === w.id}
+                                title="Corrigir saldo baseado nas transações"
+                              >
+                                {recalculating === w.id ? '...' : '🔧 Corrigir'}
+                              </button>
+                            )}
+                            <button className="edit-btn" onClick={() => { setEditingId(w.id); setEditBalance(w.balance); }} title="Editar saldo">✏️</button>
+                            <button className="delete-btn" onClick={() => onDelete(w.id)} title="Excluir">🗑️</button>
+                            <span className="wallet-expand-hint" title={selectedWalletId === w.id ? 'Fechar' : 'Ver transações'}>
+                              {selectedWalletId === w.id ? '▲' : '▼'}
+                            </span>
+                          </>
+                        );
+                      })()
                   )}
                 </div>
               </div>
