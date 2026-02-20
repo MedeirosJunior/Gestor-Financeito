@@ -1,78 +1,76 @@
 const express = require('express');
 const cors = require('cors');
-const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 const fs = require('fs');
 const app = express();
 const port = process.env.PORT || 10000;
 
-// Determinar caminho do banco de dados
-let dbPath;
-const databaseUrl = process.env.DATABASE_URL;
+// ============ CAMADA DE BANCO DE DADOS ============
+// Em produção: usa Turso (SQLite na nuvem) via TURSO_DATABASE_URL + TURSO_AUTH_TOKEN
+// Em desenvolvimento: usa arquivo SQLite local em ./data/database.db
 
-// Verificar se DATABASE_URL é uma URL de banco de dados (PostgreSQL, MySQL, etc) ou caminho local
-const isExternalDbUrl = databaseUrl && (databaseUrl.startsWith('postgresql://') || databaseUrl.startsWith('postgres://') || databaseUrl.includes('://'));
+let dbRun, dbGet, dbAll;
 
-if (isExternalDbUrl) {
-  // DATABASE_URL contém URL de banco externo, usar SQLite em /tmp
-  dbPath = '/tmp/database.db';
-} else if (databaseUrl) {
-  // DATABASE_URL contém caminho local
-  dbPath = databaseUrl;
-} else if (process.env.NODE_ENV === 'production') {
-  // Em produção sem DATABASE_URL, usar /tmp
-  dbPath = '/tmp/database.db';
+const tursoUrl = process.env.TURSO_DATABASE_URL;
+const tursoToken = process.env.TURSO_AUTH_TOKEN;
+
+if (tursoUrl) {
+  // ---- TURSO (produção) ----
+  const { createClient } = require('@libsql/client');
+  const db = createClient({ url: tursoUrl, authToken: tursoToken || '' });
+
+  console.log('☁️  Banco: Turso (SQLite na nuvem)');
+
+  dbRun = async (sql, params = []) => {
+    const r = await db.execute({ sql, args: params });
+    return { id: Number(r.lastInsertRowid ?? 0), changes: r.rowsAffected ?? 0 };
+  };
+
+  dbGet = async (sql, params = []) => {
+    const r = await db.execute({ sql, args: params });
+    return r.rows[0] ?? null;
+  };
+
+  dbAll = async (sql, params = []) => {
+    const r = await db.execute({ sql, args: params });
+    return r.rows ?? [];
+  };
+
 } else {
-  // Em desenvolvimento, usar ./data
-  dbPath = './data/database.db';
-  // Criar diretório data se não existir
-  if (!fs.existsSync('./data')) {
-    fs.mkdirSync('./data', { recursive: true });
-  }
-}
+  // ---- SQLite local (desenvolvimento) ----
+  const sqlite3 = require('sqlite3').verbose();
 
-console.log(`📂 Banco SQLite será armazenado em: ${dbPath}`);
+  let dbPath = './data/database.db';
+  if (!fs.existsSync('./data')) fs.mkdirSync('./data', { recursive: true });
 
-// Inicializar banco SQLite
-const db = new sqlite3.Database(dbPath, (err) => {
-  if (err) {
-    console.error('❌ Erro ao conectar ao banco de dados:', err);
-    process.exit(1);
-  } else {
-    console.log('✅ Conectado ao banco SQLite com sucesso!');
-  }
-});
+  const db = new sqlite3.Database(dbPath, (err) => {
+    if (err) { console.error('❌ Erro ao conectar SQLite:', err); process.exit(1); }
+    else console.log(`📂 Banco SQLite local: ${dbPath}`);
+  });
 
-// Habilitar foreign keys no SQLite
-db.run('PRAGMA foreign_keys = ON');
+  db.run('PRAGMA foreign_keys = ON');
 
-// Wrappers para Promise-based queries
-const dbRun = (sql, params = []) => {
-  return new Promise((resolve, reject) => {
+  dbRun = (sql, params = []) => new Promise((resolve, reject) => {
     db.run(sql, params, function (err) {
       if (err) reject(err);
       else resolve({ id: this.lastID, changes: this.changes });
     });
   });
-};
 
-const dbGet = (sql, params = []) => {
-  return new Promise((resolve, reject) => {
+  dbGet = (sql, params = []) => new Promise((resolve, reject) => {
     db.get(sql, params, (err, row) => {
       if (err) reject(err);
-      else resolve(row);
+      else resolve(row ?? null);
     });
   });
-};
 
-const dbAll = (sql, params = []) => {
-  return new Promise((resolve, reject) => {
+  dbAll = (sql, params = []) => new Promise((resolve, reject) => {
     db.all(sql, params, (err, rows) => {
       if (err) reject(err);
       else resolve(rows || []);
     });
   });
-};
+}
 
 // Configurar CORS
 const corsOptions = {

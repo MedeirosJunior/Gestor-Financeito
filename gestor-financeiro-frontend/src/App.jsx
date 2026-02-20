@@ -2682,14 +2682,12 @@ function Contas({ wallets, onAdd, onUpdate, onDelete, onTransfer, transactions =
     setEditingTxId(null);
   };
 
-  const selectedWallet = wallets.find(w => w.id === selectedWalletId);
   const walletTransactions = transactions.filter(t => t.wallet_id && parseInt(t.wallet_id) === selectedWalletId);
   const entradas = walletTransactions.filter(t => t.type === 'entrada').sort((a, b) => new Date(b.date) - new Date(a.date));
   const saidas = walletTransactions.filter(t => t.type === 'despesa').sort((a, b) => new Date(b.date) - new Date(a.date));
   const totalEntradas = entradas.reduce((s, t) => s + parseFloat(t.value || 0), 0);
   const totalSaidas = saidas.reduce((s, t) => s + parseFloat(t.value || 0), 0);
 
-  const allCategories = [...(categories.entrada || []), ...(categories.despesa || [])];
   const getCatLabel = (catId, type) => {
     const list = type === 'entrada' ? (categories.entrada || []) : (categories.despesa || []);
     return list.find(c => c.id === catId || c.name === catId)?.name || catId || '';

@@ -10,3 +10,7 @@ services:
         value: production
       - key: FRONTEND_URL
         value: https://gestor-financeito.netlify.app
+      - key: TURSO_DATABASE_URL
+        sync: false   # preencher no painel do Render com: libsql://seu-banco.turso.io
+      - key: TURSO_AUTH_TOKEN
+        sync: false   # preencher no painel do Render com o token gerado pelo Turso
