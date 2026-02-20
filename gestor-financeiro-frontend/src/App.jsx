@@ -7,6 +7,7 @@ import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
 import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts';
 
 // Componente de Loading para Suspense
 const SuspenseLoader = ({ message = "Carregando..." }) => (
@@ -988,6 +989,31 @@ function App() {
     if (res.ok) { await fetchWallets(); toast.success('Conta removida!'); }
   }, [fetchWallets]);
 
+  const transferBetweenWallets = useCallback(async (fromId, toId, amount) => {
+    const from = wallets.find(w => w.id === fromId);
+    const to = wallets.find(w => w.id === toId);
+    if (!from || !to) { toast.error('Conta não encontrada!'); return false; }
+    const amt = parseFloat(amount);
+    if (isNaN(amt) || amt <= 0) { toast.error('Valor inválido!'); return false; }
+    if (parseFloat(from.balance) < amt) { toast.error('Saldo insuficiente na conta de origem!'); return false; }
+    try {
+      const [r1, r2] = await Promise.all([
+        fetch(`${config.API_URL}/wallets/${fromId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ balance: parseFloat(from.balance) - amt })
+        }),
+        fetch(`${config.API_URL}/wallets/${toId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ balance: parseFloat(to.balance) + amt })
+        })
+      ]);
+      if (r1.ok && r2.ok) { await fetchWallets(); toast.success('Transferência realizada com sucesso!'); return true; }
+      toast.error('Erro na transferência!'); return false;
+    } catch (e) { toast.error('Erro na transferência!'); return false; }
+  }, [wallets, fetchWallets]);
+
   // ============ METAS ============
   const fetchGoals = useCallback(async () => {
     if (!currentUser?.email) return;
@@ -1048,7 +1074,35 @@ function App() {
     });
 
     setDueAlerts(alerts);
+
+    // Enviar notificações browser para despesas vencidas/próximas
+    if ('Notification' in window && Notification.permission === 'granted') {
+      try {
+        const notified = new Set(JSON.parse(sessionStorage.getItem('notifiedExpenses') || '[]'));
+        alerts.forEach(alert => {
+          const key = `${alert.id}-${alert.nextDue}`;
+          if (!notified.has(key)) {
+            const title = alert.overdue
+              ? `⚠️ Despesa Vencida: ${alert.description}`
+              : `🔔 Vence em ${alert.daysUntilDue} dia(s): ${alert.description}`;
+            new Notification(title, {
+              body: `Valor: R$ ${parseFloat(alert.value).toFixed(2)} • Vencimento: ${alert.nextDue}`,
+              icon: '/favicon.ico'
+            });
+            notified.add(key);
+          }
+        });
+        sessionStorage.setItem('notifiedExpenses', JSON.stringify([...notified]));
+      } catch (e) { /* ignora erros de notificação */ }
+    }
   };
+
+  // Solicitar permissão para notificações browser ao autenticar
+  useEffect(() => {
+    if (isAuthenticated && 'Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
+  }, [isAuthenticated]);
 
   const isAdmin = currentUser?.email === 'junior395@gmail.com';
 
@@ -1247,6 +1301,7 @@ function App() {
               onAdd={addWallet}
               onUpdate={updateWallet}
               onDelete={deleteWallet}
+              onTransfer={transferBetweenWallets}
             />
           )}
           {activeTab === 'metas' && (
@@ -1923,6 +1978,23 @@ const Dashboard = React.memo(({ transactions, dueAlerts, budgets = [], goals = [
   const prevDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
   const prevMonth = prevDate.toISOString().slice(0, 7);
 
+  // Dados dos últimos 6 meses para o gráfico de barras
+  const last6Months = useMemo(() => {
+    const nowD = new Date();
+    return Array.from({ length: 6 }, (_, i) => {
+      const d = new Date(nowD.getFullYear(), nowD.getMonth() - 5 + i, 1);
+      const key = d.toISOString().slice(0, 7);
+      const label = d.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' });
+      const entradas = transactions
+        .filter(t => t.type === 'entrada' && t.date.startsWith(key))
+        .reduce((s, t) => s + parseFloat(t.value), 0);
+      const despesas = transactions
+        .filter(t => t.type === 'despesa' && t.date.startsWith(key))
+        .reduce((s, t) => s + parseFloat(t.value), 0);
+      return { label, entradas, despesas };
+    });
+  }, [transactions]);
+
   // Mapeamento ID→nome para calcular gastos por orçamento
   const categoriasDesp = categories?.despesa || [
     { id: 'alim', name: 'Alimentação' }, { id: 'trans', name: 'Transporte' },
@@ -2016,6 +2088,22 @@ const Dashboard = React.memo(({ transactions, dueAlerts, budgets = [], goals = [
             {saldo >= 0 ? '✅ Positivo' : '⚠️ Negativo'}
           </div>
         </div>
+      </div>
+
+      {/* Gráfico de barras — últimos 6 meses */}
+      <div className="chart-section">
+        <h3>📊 Evolução dos Últimos 6 Meses</h3>
+        <ResponsiveContainer width="100%" height={260}>
+          <BarChart data={last6Months} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="rgba(100,116,139,0.2)" />
+            <XAxis dataKey="label" tick={{ fontSize: 12 }} />
+            <YAxis tickFormatter={v => `R$${v >= 1000 ? (v / 1000).toFixed(0) + 'k' : v}`} tick={{ fontSize: 11 }} />
+            <Tooltip formatter={(value) => [`R$ ${value.toFixed(2)}`, undefined]} />
+            <Legend />
+            <Bar dataKey="entradas" name="Entradas" fill="#2ecc71" radius={[4, 4, 0, 0]} />
+            <Bar dataKey="despesas" name="Despesas" fill="#e74c3c" radius={[4, 4, 0, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
       </div>
 
       {/* Alertas de Vencimento de Recorrentes */}
@@ -2447,11 +2535,13 @@ function Orcamentos({ budgets, transactions, categories, onAdd, onUpdate, onDele
 }
 
 // Componente Contas (Carteiras)
-function Contas({ wallets, onAdd, onUpdate, onDelete }) {
+function Contas({ wallets, onAdd, onUpdate, onDelete, onTransfer }) {
   const [form, setForm] = useState({ name: '', type: 'corrente', balance: '' });
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [editBalance, setEditBalance] = useState('');
+  const [showTransfer, setShowTransfer] = useState(false);
+  const [transferForm, setTransferForm] = useState({ fromId: '', toId: '', amount: '' });
 
   const tipos = [
     { value: 'corrente', label: '🏦 Conta Corrente' },
@@ -2476,19 +2566,64 @@ function Contas({ wallets, onAdd, onUpdate, onDelete }) {
     setEditingId(null);
   };
 
+  const handleTransfer = (e) => {
+    e.preventDefault();
+    const fromId = parseInt(transferForm.fromId);
+    const toId = parseInt(transferForm.toId);
+    if (fromId === toId) { toast.error('Selecione contas diferentes!'); return; }
+    onTransfer(fromId, toId, parseFloat(transferForm.amount));
+    setShowTransfer(false);
+    setTransferForm({ fromId: '', toId: '', amount: '' });
+  };
+
   return (
     <div className="contas-section">
       <div className="section-header">
         <h2>🏦 Contas e Carteiras</h2>
-        <button className="add-user-btn" onClick={() => setShowForm(v => !v)}>
-          {showForm ? '❌ Cancelar' : '➕ Nova Conta'}
-        </button>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <button className="add-user-btn" style={{ background: '#8b5cf6' }} onClick={() => { setShowTransfer(v => !v); setShowForm(false); }}>
+            {showTransfer ? '❌ Cancelar' : '🔄 Transferir'}
+          </button>
+          <button className="add-user-btn" onClick={() => { setShowForm(v => !v); setShowTransfer(false); }}>
+            {showForm ? '❌ Cancelar' : '➕ Nova Conta'}
+          </button>
+        </div>
       </div>
 
       <div className="total-balance-card">
         <span>Saldo Total</span>
         <strong className={totalBalance >= 0 ? 'text-success' : 'text-danger'}>R$ {totalBalance.toFixed(2)}</strong>
       </div>
+
+      {showTransfer && (
+        <div className="add-user-form">
+          <h3>🔄 Transferir entre Contas</h3>
+          <form onSubmit={handleTransfer}>
+            <div className="form-grid-2">
+              <div className="form-group">
+                <label>Conta de Origem</label>
+                <select value={transferForm.fromId} onChange={e => setTransferForm({ ...transferForm, fromId: e.target.value })} required>
+                  <option value="">Selecione a origem</option>
+                  {wallets.map(w => <option key={w.id} value={w.id}>{w.name} — R$ {parseFloat(w.balance).toFixed(2)}</option>)}
+                </select>
+              </div>
+              <div className="form-group">
+                <label>Conta de Destino</label>
+                <select value={transferForm.toId} onChange={e => setTransferForm({ ...transferForm, toId: e.target.value })} required>
+                  <option value="">Selecione o destino</option>
+                  {wallets.map(w => <option key={w.id} value={w.id}>{w.name} — R$ {parseFloat(w.balance).toFixed(2)}</option>)}
+                </select>
+              </div>
+              <div className="form-group">
+                <label>Valor (R$)</label>
+                <input type="number" step="0.01" min="0.01" placeholder="0,00" value={transferForm.amount}
+                  onChange={e => setTransferForm({ ...transferForm, amount: e.target.value })} required />
+              </div>
+            </div>
+            <button type="submit" className="submit-btn" style={{ background: '#8b5cf6' }}>🔄 Confirmar Transferência</button>
+          </form>
+        </div>
+      )}
 
       {showForm && (
         <div className="add-user-form">
@@ -2809,7 +2944,9 @@ const LancamentoForm = React.memo(({ type, onAdd, title, categories, isApiAvaila
 
 // Relatórios mensais
 function Relatorios({ transactions, loadingExport, setLoadingExport }) {
+  const [reportMode, setReportMode] = useState('monthly');
   const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7));
+  const [selectedYear, setSelectedYear] = useState(String(new Date().getFullYear()));
 
   const monthlyData = transactions.filter(t =>
     t.date.startsWith(selectedMonth)
@@ -2825,6 +2962,22 @@ function Relatorios({ transactions, loadingExport, setLoadingExport }) {
   despesas.forEach(t => {
     categoriesData[t.category] = (categoriesData[t.category] || 0) + parseFloat(t.value);
   });
+
+  // Dados anuais consolidados
+  const monthNames = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+  const annualData = Array.from({ length: 12 }, (_, m) => {
+    const key = `${selectedYear}-${String(m + 1).padStart(2, '0')}`;
+    const ent = transactions.filter(t => t.type === 'entrada' && t.date.startsWith(key))
+      .reduce((s, t) => s + parseFloat(t.value), 0);
+    const desp = transactions.filter(t => t.type === 'despesa' && t.date.startsWith(key))
+      .reduce((s, t) => s + parseFloat(t.value), 0);
+    return { mes: monthNames[m], key, entradas: ent, despesas: desp, saldo: ent - desp };
+  });
+  const annualTotals = annualData.reduce((acc, row) => ({
+    entradas: acc.entradas + row.entradas,
+    despesas: acc.despesas + row.despesas,
+    saldo: acc.saldo + row.saldo
+  }), { entradas: 0, despesas: 0, saldo: 0 });
 
   // Função para exportar para Excel
   const exportToExcel = async () => {
@@ -2941,68 +3094,128 @@ function Relatorios({ transactions, loadingExport, setLoadingExport }) {
 
   return (
     <div className="relatorios">
-      <h2>📈 Relatórios Mensais</h2>
+      <h2>📈 Relatórios Financeiros</h2>
 
-      <div className="month-selector">
-        <label>Selecionar Mês:</label>
-        <input
-          type="month"
-          value={selectedMonth}
-          onChange={e => setSelectedMonth(e.target.value)}
-        />
+      {/* Toggle modo mensal / anual */}
+      <div className="report-mode-toggle">
+        <button
+          className={`mode-btn ${reportMode === 'monthly' ? 'active' : ''}`}
+          onClick={() => setReportMode('monthly')}
+        >📅 Mensal</button>
+        <button
+          className={`mode-btn ${reportMode === 'annual' ? 'active' : ''}`}
+          onClick={() => setReportMode('annual')}
+        >📆 Anual</button>
       </div>
 
-      <div className="export-buttons">
-        <ButtonSpinner
-          onClick={exportToExcel}
-          className="export-btn excel"
-          loading={loadingExport}
-        >
-          📊 Exportar Excel
-        </ButtonSpinner>
-        <ButtonSpinner
-          onClick={exportToCSV}
-          className="export-btn csv"
-          loading={loadingExport}
-        >
-          📄 Exportar CSV
-        </ButtonSpinner>
-      </div>
+      {reportMode === 'monthly' ? (
+        <>
+          <div className="month-selector">
+            <label>Selecionar Mês:</label>
+            <input
+              type="month"
+              value={selectedMonth}
+              onChange={e => setSelectedMonth(e.target.value)}
+            />
+          </div>
 
-      <div className="report-summary">
-        <div className="summary-card">
-          <h3>Resumo do Mês</h3>
-          <p>💵 Entradas: R$ {totalEntradas.toFixed(2)}</p>
-          <p>💸 Despesas: R$ {totalDespesas.toFixed(2)}</p>
-          <p className={totalEntradas - totalDespesas >= 0 ? 'positive' : 'negative'}>
-            💰 Saldo: R$ {(totalEntradas - totalDespesas).toFixed(2)}
-          </p>
-        </div>
-      </div>
+          <div className="export-buttons">
+            <ButtonSpinner onClick={exportToExcel} className="export-btn excel" loading={loadingExport}>
+              📊 Exportar Excel
+            </ButtonSpinner>
+            <ButtonSpinner onClick={exportToCSV} className="export-btn csv" loading={loadingExport}>
+              📄 Exportar CSV
+            </ButtonSpinner>
+          </div>
 
-      <div className="categories-report">
-        <h3>📊 Gastos por Categoria</h3>
-        {Object.keys(categoriesData).length === 0 ? (
-          <p className="empty-message">Nenhuma despesa neste mês</p>
-        ) : (
-          Object.entries(categoriesData)
-            .sort((a, b) => b[1] - a[1])
-            .map(([category, value]) => {
-              const pct = totalDespesas > 0 ? (value / totalDespesas) * 100 : 0;
-              return (
-                <div key={category} className="cat-report-row">
-                  <div className="cat-report-label">
-                    <span>{category}</span>
-                    <span className="cat-report-value">R$ {value.toFixed(2)} <small>({pct.toFixed(1)}%)</small></span>
-                  </div>
-                  <div className="cat-report-bar-wrap">
-                    <div className="cat-report-bar" style={{ width: `${pct}%` }} />
-                  </div>
-                </div>
-              );
-            })
-        )}
-      </div>
+          <div className="report-summary">
+            <div className="summary-card">
+              <h3>Resumo do Mês</h3>
+              <p>💵 Entradas: R$ {totalEntradas.toFixed(2)}</p>
+              <p>💸 Despesas: R$ {totalDespesas.toFixed(2)}</p>
+              <p className={totalEntradas - totalDespesas >= 0 ? 'positive' : 'negative'}>
+                💰 Saldo: R$ {(totalEntradas - totalDespesas).toFixed(2)}
+              </p>
+            </div>
+          </div>
+
+          <div className="categories-report">
+            <h3>📊 Gastos por Categoria</h3>
+            {Object.keys(categoriesData).length === 0 ? (
+              <p className="empty-message">Nenhuma despesa neste mês</p>
+            ) : (
+              Object.entries(categoriesData)
+                .sort((a, b) => b[1] - a[1])
+                .map(([category, value]) => {
+                  const pct = totalDespesas > 0 ? (value / totalDespesas) * 100 : 0;
+                  return (
+                    <div key={category} className="cat-report-row">
+                      <div className="cat-report-label">
+                        <span>{category}</span>
+                        <span className="cat-report-value">R$ {value.toFixed(2)} <small>({pct.toFixed(1)}%)</small></span>
+                      </div>
+                      <div className="cat-report-bar-wrap">
+                        <div className="cat-report-bar" style={{ width: `${pct}%` }} />
+                      </div>
+                    </div>
+                  );
+                })
+            )}
+          </div>
+        </>
+      ) : (
+        /* Modo Anual */
+        <>
+          <div className="month-selector">
+            <label>Selecionar Ano:</label>
+            <input type="number" min="2020" max="2099" value={selectedYear}
+              onChange={e => setSelectedYear(e.target.value)}
+              style={{ width: '100px', padding: '8px', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '14px' }} />
+          </div>
+
+          <div className="report-summary">
+            <div className="summary-card">
+              <h3>Resumo Anual — {selectedYear}</h3>
+              <p>💵 Entradas: R$ {annualTotals.entradas.toFixed(2)}</p>
+              <p>💸 Despesas: R$ {annualTotals.despesas.toFixed(2)}</p>
+              <p className={annualTotals.saldo >= 0 ? 'positive' : 'negative'}>
+                💰 Saldo: R$ {annualTotals.saldo.toFixed(2)}
+              </p>
+            </div>
+          </div>
+
+          <div className="annual-table-wrap">
+            <table className="annual-table">
+              <thead>
+                <tr>
+                  <th>Mês</th>
+                  <th>Entradas</th>
+                  <th>Despesas</th>
+                  <th>Saldo</th>
+                </tr>
+              </thead>
+              <tbody>
+                {annualData.map(row => (
+                  <tr key={row.key}>
+                    <td>{row.mes}</td>
+                    <td className="text-success">R$ {row.entradas.toFixed(2)}</td>
+                    <td className="text-danger">R$ {row.despesas.toFixed(2)}</td>
+                    <td className={row.saldo >= 0 ? 'text-success' : 'text-danger'}>R$ {row.saldo.toFixed(2)}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr style={{ fontWeight: 700 }}>
+                  <td>Total</td>
+                  <td className="text-success">R$ {annualTotals.entradas.toFixed(2)}</td>
+                  <td className="text-danger">R$ {annualTotals.despesas.toFixed(2)}</td>
+                  <td className={annualTotals.saldo >= 0 ? 'text-success' : 'text-danger'}>R$ {annualTotals.saldo.toFixed(2)}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -3012,6 +3225,7 @@ const Historico = React.memo(({ transactions, onDelete, onUpdate, isApiAvailable
   const [filter, setFilter] = useState('all');
   const [monthFilter, setMonthFilter] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('');
   const [editingId, setEditingId] = useState(null);
   const [editForm, setEditForm] = useState({ type: '', description: '', category: '', value: '', date: '' });
 
@@ -3023,6 +3237,16 @@ const Historico = React.memo(({ transactions, onDelete, onUpdate, isApiAvailable
     (categories?.[editForm.type] || []),
     [categories, editForm.type]
   );
+
+  // Todas as categorias únicas presentes nas transações (para o filtro)
+  const allCategoryOptions = useMemo(() => {
+    const allCats = [...(categories?.entrada || []), ...(categories?.despesa || [])];
+    const ids = [...new Set(transactions.map(t => t.category))];
+    return ids.map(id => {
+      const found = allCats.find(c => c.id === id);
+      return { id, name: found ? found.name : id, icon: found?.icon || '' };
+    }).sort((a, b) => a.name.localeCompare(b.name));
+  }, [transactions, categories]);
 
   const startEdit = (transaction) => {
     setEditingId(transaction.id);
@@ -3058,9 +3282,10 @@ const Historico = React.memo(({ transactions, onDelete, onUpdate, isApiAvailable
       const searchMatch = !debouncedSearchTerm ||
         t.description.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
         t.category.toLowerCase().includes(debouncedSearchTerm.toLowerCase());
-      return typeMatch && monthMatch && searchMatch;
+      const categoryMatch = !categoryFilter || t.category === categoryFilter;
+      return typeMatch && monthMatch && searchMatch && categoryMatch;
     }).reverse(),
-    [transactions, filter, monthFilter, debouncedSearchTerm]
+    [transactions, filter, monthFilter, debouncedSearchTerm, categoryFilter]
   );
 
   // Função para exportar histórico para Excel
@@ -3111,6 +3336,13 @@ const Historico = React.memo(({ transactions, onDelete, onUpdate, isApiAvailable
           onChange={e => setMonthFilter(e.target.value)}
           placeholder="Filtrar por mês"
         />
+
+        <select value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)}>
+          <option value="">Todas as categorias</option>
+          {allCategoryOptions.map(cat => (
+            <option key={cat.id} value={cat.id}>{cat.icon} {cat.name}</option>
+          ))}
+        </select>
 
         <input
           type="text"
