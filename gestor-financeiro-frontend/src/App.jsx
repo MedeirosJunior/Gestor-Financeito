@@ -593,15 +593,13 @@ function App() {
 
     setLoadingTransactions(true);
     try {
-      console.log('🗑️ Tentando excluir transação:', id, 'para usuário:', currentUser.email);
-
       const response = await fetch(`${config.API_URL}/transactions/${id}?userId=${encodeURIComponent(currentUser.email)}`, {
         method: 'DELETE',
       });
 
       if (!response.ok) {
         if (response.status === 403) {
-          toast.error('Você não tem permissão para excluir esta transação. Ela pode pertencer a outro usuário.');
+          toast.error('Você não tem permissão para excluir esta transação.');
           return;
         } else if (response.status === 404) {
           toast.error('Transação não encontrada. Ela pode já ter sido excluída.');
@@ -615,15 +613,38 @@ function App() {
       toast.success('Transação excluída com sucesso!');
     } catch (error) {
       console.error('❌ Erro ao excluir transação via API:', error);
-      if (error.message.includes('403')) {
-        toast.error('Acesso negado: você só pode excluir suas próprias transações.');
-      } else if (error.message.includes('404')) {
-        toast.error('Transação não encontrada.');
-        fetchTransactions();
+      setIsApiAvailable(false);
+      ErrorHandler.handleApiError(error, 'excluir transação');
+    } finally {
+      setLoadingTransactions(false);
+    }
+  }, [fetchTransactions, currentUser, isApiAvailable]);
+
+  const updateTransaction = useCallback(async (id, transaction) => {
+    if (!isApiAvailable) {
+      toast.error('Conexão com servidor necessária para editar transações.');
+      return;
+    }
+    setLoadingTransactions(true);
+    try {
+      const response = await fetch(`${config.API_URL}/transactions/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...transaction, userId: currentUser.email })
+      });
+      const data = await response.json();
+      if (response.ok) {
+        await fetchTransactions();
+        toast.success('Transação atualizada com sucesso!');
+        return true;
       } else {
-        setIsApiAvailable(false);
-        ErrorHandler.handleApiError(error, 'excluir transação');
+        toast.error(data.error || 'Erro ao atualizar transação');
+        return false;
       }
+    } catch (error) {
+      console.error('Erro ao atualizar transação:', error);
+      toast.error('Erro de conexão ao atualizar transação');
+      return false;
     } finally {
       setLoadingTransactions(false);
     }
@@ -685,46 +706,50 @@ function App() {
     }
   }, [isAuthenticated, fetchTransactions]);
 
+  const fetchRecurringExpenses = useCallback(async () => {
+    if (!currentUser?.email) return;
+    try {
+      const response = await fetch(`${config.API_URL}/recurring-expenses?userId=${encodeURIComponent(currentUser.email)}`);
+      if (response.ok) {
+        const data = await response.json();
+        const mapped = data.map(e => ({
+          ...e,
+          recurrence: e.frequency,
+          nextDue: e.next_due_date
+        }));
+        setRecurringExpenses(mapped);
+        checkDueExpenses(mapped);
+      }
+    } catch (error) {
+      console.error('Erro ao buscar despesas recorrentes:', error);
+    }
+  }, [currentUser]); // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     if (isAuthenticated) {
-      const saved = localStorage.getItem('recurringExpenses');
-      if (saved) {
-        const expenses = JSON.parse(saved);
-        setRecurringExpenses(expenses);
-        checkDueExpenses(expenses);
-      }
+      fetchRecurringExpenses();
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, fetchRecurringExpenses]);
 
   // Funções para despesas recorrentes
-  const saveRecurringExpenses = (expenses) => {
-    localStorage.setItem('recurringExpenses', JSON.stringify(expenses));
-    setRecurringExpenses(expenses);
-    checkDueExpenses(expenses);
-  };
-
-  const addRecurringExpense = (expense) => {
+  const addRecurringExpense = async (expense) => {
     if (!ValidationUtils.isValidDescription(expense.description)) {
       toast.error('Descrição deve ter entre 1 e 100 caracteres!');
       return;
     }
-
     if (!ValidationUtils.isReasonableAmount(expense.value)) {
       toast.error('Valor deve ser um número positivo até R$ 1.000.000!');
       return;
     }
-
     if (!ValidationUtils.isValidDate(expense.startDate)) {
       toast.error('Data de início inválida!');
       return;
     }
-
     const validRecurrences = ['monthly', 'bimonthly', 'quarterly', 'semiannual', 'annual', 'fifth-business-day'];
     if (!expense.recurrence || !validRecurrences.includes(expense.recurrence)) {
       toast.error('Recorrência inválida! Selecione uma opção válida.');
       return;
     }
-
     const validCategories = ['Alimentação', 'Transporte', 'Moradia', 'Saúde', 'Lazer', 'Outros'];
     if (!ValidationUtils.isValidCategory(expense.category, validCategories)) {
       toast.error('Categoria inválida!');
@@ -733,40 +758,47 @@ function App() {
 
     setLoadingRecurring(true);
     try {
-      const newExpense = {
-        id: Date.now(),
-        description: ValidationUtils.sanitizeText(expense.description),
-        value: parseFloat(expense.value),
-        startDate: expense.startDate,
-        recurrence: expense.recurrence,
-        category: expense.category,
-        createdAt: new Date().toISOString(),
-        nextDue: calculateNextDue(expense.startDate, expense.recurrence)
-      };
-
-      const updated = [...recurringExpenses, newExpense];
-      saveRecurringExpenses(updated);
-      toast.success('Despesa recorrente adicionada com sucesso!');
+      const nextDueDate = calculateNextDue(expense.startDate, expense.recurrence);
+      const response = await fetch(`${config.API_URL}/recurring-expenses`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: currentUser.email,
+          description: ValidationUtils.sanitizeText(expense.description),
+          category: expense.category,
+          value: parseFloat(expense.value),
+          frequency: expense.recurrence,
+          next_due_date: nextDueDate
+        })
+      });
+      if (response.ok) {
+        await fetchRecurringExpenses();
+        toast.success('Despesa recorrente adicionada com sucesso!');
+      } else {
+        const data = await response.json();
+        toast.error(data.error || 'Erro ao adicionar despesa recorrente');
+      }
     } catch (error) {
-      ErrorHandler.handleStorageError(error, 'adicionar despesa recorrente');
+      toast.error('Erro de conexão ao adicionar despesa recorrente');
     } finally {
       setLoadingRecurring(false);
     }
   };
 
-  const deleteRecurringExpense = (id) => {
-    if (!ValidationUtils.isValidPositiveNumber(id)) {
-      toast.error('ID de despesa inválido!');
-      return;
-    }
-
+  const deleteRecurringExpense = async (id) => {
     setLoadingRecurring(true);
     try {
-      const updated = recurringExpenses.filter(expense => expense.id !== id);
-      saveRecurringExpenses(updated);
-      toast.success('Despesa recorrente excluída com sucesso!');
+      const response = await fetch(`${config.API_URL}/recurring-expenses/${id}`, {
+        method: 'DELETE'
+      });
+      if (response.ok) {
+        await fetchRecurringExpenses();
+        toast.success('Despesa recorrente excluída com sucesso!');
+      } else {
+        toast.error('Erro ao excluir despesa recorrente');
+      }
     } catch (error) {
-      ErrorHandler.handleStorageError(error, 'excluir despesa recorrente');
+      toast.error('Erro de conexão ao excluir despesa recorrente');
     } finally {
       setLoadingRecurring(false);
     }
@@ -853,6 +885,8 @@ function App() {
     setDueAlerts(alerts);
   };
 
+  const isAdmin = currentUser?.email === 'junior395@gmail.com';
+
   // Se não estiver autenticado, mostrar tela de login
   if (!isAuthenticated) {
     return (
@@ -887,13 +921,15 @@ function App() {
             </div>
             <div className="user-info">
               <span>👤 {currentUser?.name || currentUser?.username}</span>
-              <button
-                className={activeTab === 'usuarios' ? 'active' : ''}
-                onClick={() => setActiveTab('usuarios')}
-                title="Gerenciar Usuários"
-              >
-                👥 Usuários
-              </button>
+              {isAdmin && (
+                <button
+                  className={activeTab === 'usuarios' ? 'active' : ''}
+                  onClick={() => setActiveTab('usuarios')}
+                  title="Gerenciar Usuários"
+                >
+                  👥 Usuários
+                </button>
+              )}
               <button
                 className="logout-btn"
                 onClick={handleLogout}
@@ -995,6 +1031,7 @@ function App() {
             <Historico
               transactions={transactions}
               onDelete={deleteTransaction}
+              onUpdate={updateTransaction}
               isApiAvailable={isApiAvailable}
               categories={categories}
             />
@@ -1014,7 +1051,7 @@ function App() {
               onDeleteCategory={deleteCustomCategory}
             />
           )}
-          {activeTab === 'usuarios' && (
+          {activeTab === 'usuarios' && isAdmin && (
             <GerenciarUsuarios />
           )}
         </Suspense>
@@ -1723,16 +1760,16 @@ const Dashboard = React.memo(({ transactions, dueAlerts }) => {
         <div className="due-alerts">
           <h3>⚠️ Alertas de Vencimento</h3>
           {dueAlerts.map(alert => (
-            <div key={alert.id} className={`alert-item ${alert.status}`}>
+            <div key={alert.id} className={`alert-item ${alert.overdue ? 'overdue' : 'due-soon'}`}>
               <div className="alert-info">
                 <span className="alert-description">{alert.description}</span>
                 <span className="alert-value">R$ {parseFloat(alert.value).toFixed(2)}</span>
               </div>
               <div className="alert-date">
-                <span className={`alert-status ${alert.status}`}>
-                  {alert.status === 'overdue' ? '🔴 Vencida' : '🟡 Vence em breve'}
+                <span className={`alert-status ${alert.overdue ? 'overdue' : 'due-soon'}`}>
+                  {alert.overdue ? '🔴 Vencida' : `🟡 Vence em ${alert.daysUntilDue} dia(s)`}
                 </span>
-                <span className="alert-due-date">{alert.dueDate}</span>
+                <span className="alert-due-date">{alert.nextDue}</span>
               </div>
             </div>
           ))}
@@ -2221,13 +2258,47 @@ function Relatorios({ transactions, loadingExport, setLoadingExport }) {
 }
 
 // Histórico de transações otimizado
-const Historico = React.memo(({ transactions, onDelete, isApiAvailable }) => {
+const Historico = React.memo(({ transactions, onDelete, onUpdate, isApiAvailable, categories }) => {
   const [filter, setFilter] = useState('all');
   const [monthFilter, setMonthFilter] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
+  const [editingId, setEditingId] = useState(null);
+  const [editForm, setEditForm] = useState({ type: '', description: '', category: '', value: '', date: '' });
 
   // Implementar debounce na busca
   const debouncedSearchTerm = useDebounce(searchTerm, 300);
+
+  // Categorias disponíveis para o tipo selecionado
+  const editCategoryOptions = useMemo(() =>
+    (categories?.[editForm.type] || []),
+    [categories, editForm.type]
+  );
+
+  const startEdit = (transaction) => {
+    setEditingId(transaction.id);
+    setEditForm({
+      type: transaction.type,
+      description: transaction.description,
+      category: transaction.category,
+      value: transaction.value,
+      date: transaction.date
+    });
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditForm({ type: '', description: '', category: '', value: '', date: '' });
+  };
+
+  const handleUpdate = async (e) => {
+    e.preventDefault();
+    if (!editForm.description || !editForm.value || !editForm.category || !editForm.date) {
+      toast.error('Preencha todos os campos!');
+      return;
+    }
+    const success = await onUpdate(editingId, { ...editForm, value: parseFloat(editForm.value) });
+    if (success) cancelEdit();
+  };
 
   // Otimizar filtros com useMemo incluindo busca e validação de usuário
   const filteredTransactions = useMemo(() =>
@@ -2307,39 +2378,95 @@ const Historico = React.memo(({ transactions, onDelete, isApiAvailable }) => {
       <div className="transactions-list">
         {filteredTransactions.map(transaction => (
           <div key={transaction.id} className={`transaction-card ${transaction.type}`}>
-            <div className="transaction-info">
-              <h4>{transaction.description}</h4>
-              <p>{transaction.category}</p>
-              <span className="date">{new Date(transaction.date).toLocaleDateString('pt-BR')}</span>
-            </div>
-            <div className="transaction-value">
-              <span className={`value ${transaction.type}`}>
-                {transaction.type === 'entrada' ? '+' : '-'}R$ {parseFloat(transaction.value).toFixed(2)}
-              </span>
-              <button
-                onClick={() => {
-                  if (!isApiAvailable) {
-                    alert('Conexão com servidor necessária para excluir transações.');
-                    return;
-                  }
-
-                  console.log('Transação a ser excluída:', {
-                    id: transaction.id,
-                    userId: transaction.userId,
-                    description: transaction.description
-                  });
-
-                  if (window.confirm(`Deseja realmente excluir "${transaction.description}"?`)) {
-                    onDelete(transaction.id);
-                  }
-                }}
-                className={`delete-btn ${!isApiAvailable ? 'disabled' : ''}`}
-                disabled={!isApiAvailable}
-                title={!isApiAvailable ? 'Servidor offline - exclusão indisponível' : `Excluir "${transaction.description}"`}
-              >
-                {!isApiAvailable ? '🚫' : '🗑️'}
-              </button>
-            </div>
+            {editingId === transaction.id ? (
+              <form onSubmit={handleUpdate} className="edit-transaction-form">
+                <div className="edit-transaction-grid">
+                  <select
+                    value={editForm.type}
+                    onChange={e => setEditForm({ ...editForm, type: e.target.value, category: '' })}
+                    required
+                  >
+                    <option value="entrada">Entrada</option>
+                    <option value="despesa">Despesa</option>
+                  </select>
+                  <input
+                    type="text"
+                    value={editForm.description}
+                    onChange={e => setEditForm({ ...editForm, description: e.target.value })}
+                    placeholder="Descrição"
+                    required
+                  />
+                  <select
+                    value={editForm.category}
+                    onChange={e => setEditForm({ ...editForm, category: e.target.value })}
+                    required
+                  >
+                    <option value="">Categoria</option>
+                    {editCategoryOptions.map(cat => (
+                      <option key={cat.id} value={cat.id}>{cat.icon} {cat.name}</option>
+                    ))}
+                  </select>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={editForm.value}
+                    onChange={e => setEditForm({ ...editForm, value: e.target.value })}
+                    placeholder="Valor"
+                    required
+                  />
+                  <input
+                    type="date"
+                    value={editForm.date}
+                    onChange={e => setEditForm({ ...editForm, date: e.target.value })}
+                    required
+                  />
+                </div>
+                <div className="edit-form-actions">
+                  <button type="submit" className="submit-btn">💾 Salvar</button>
+                  <button type="button" className="cancel-btn" onClick={cancelEdit}>❌ Cancelar</button>
+                </div>
+              </form>
+            ) : (
+              <>
+                <div className="transaction-info">
+                  <h4>{transaction.description}</h4>
+                  <p>{transaction.category}</p>
+                  <span className="date">{new Date(transaction.date).toLocaleDateString('pt-BR')}</span>
+                </div>
+                <div className="transaction-value">
+                  <span className={`value ${transaction.type}`}>
+                    {transaction.type === 'entrada' ? '+' : '-'}R$ {parseFloat(transaction.value).toFixed(2)}
+                  </span>
+                  <div className="transaction-btns">
+                    {isApiAvailable && (
+                      <button
+                        onClick={() => startEdit(transaction)}
+                        className="edit-btn"
+                        title="Editar transação"
+                      >
+                        ✏️
+                      </button>
+                    )}
+                    <button
+                      onClick={() => {
+                        if (!isApiAvailable) {
+                          alert('Conexão com servidor necessária para excluir transações.');
+                          return;
+                        }
+                        if (window.confirm(`Deseja realmente excluir "${transaction.description}"?`)) {
+                          onDelete(transaction.id);
+                        }
+                      }}
+                      className={`delete-btn ${!isApiAvailable ? 'disabled' : ''}`}
+                      disabled={!isApiAvailable}
+                      title={!isApiAvailable ? 'Servidor offline' : `Excluir "${transaction.description}"`}
+                    >
+                      {!isApiAvailable ? '🚫' : '🗑️'}
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         ))}
       </div>

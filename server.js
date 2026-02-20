@@ -311,6 +311,33 @@ app.post('/transactions', async (req, res) => {
   }
 });
 
+app.put('/transactions/:id', async (req, res) => {
+  const { id } = req.params;
+  const { type, description, category, value, date, userId } = req.body;
+
+  if (!type || !description || !category || !value || !date || !userId) {
+    return res.status(400).json({ error: 'Todos os campos são obrigatórios' });
+  }
+
+  try {
+    const checkResult = await dbGet('SELECT userId FROM transactions WHERE id = ?', [id]);
+    if (!checkResult) {
+      return res.status(404).json({ error: 'Transação não encontrada' });
+    }
+    if (checkResult.userId !== userId) {
+      return res.status(403).json({ error: 'Sem permissão para editar esta transação' });
+    }
+    await dbRun(
+      'UPDATE transactions SET type = ?, description = ?, category = ?, value = ?, date = ? WHERE id = ?',
+      [type, description, category, parseFloat(value), date, id]
+    );
+    res.json({ message: 'Transação atualizada com sucesso' });
+  } catch (error) {
+    console.error('Erro ao atualizar transação:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.delete('/transactions/:id', async (req, res) => {
   const { id } = req.params;
   const { userId } = req.query;
