@@ -1173,6 +1173,8 @@ function App() {
             <Dashboard
               transactions={transactions}
               dueAlerts={dueAlerts}
+              budgets={budgets}
+              categories={categories}
             />
           )}
           {activeTab === 'entradas' && (
@@ -1903,8 +1905,20 @@ const CategoryManagement = React.memo(({
 });
 
 // Dashboard com resumo financeiro otimizado
-const Dashboard = React.memo(({ transactions, dueAlerts }) => {
+const Dashboard = React.memo(({ transactions, dueAlerts, budgets = [], categories }) => {
   const currentMonth = new Date().toISOString().slice(0, 7);
+
+  // Mapeamento ID→nome para calcular gastos por orçamento
+  const categoriasDesp = categories?.despesa || [
+    { id: 'alim', name: 'Alimentação' }, { id: 'trans', name: 'Transporte' },
+    { id: 'mor', name: 'Moradia' }, { id: 'sau', name: 'Saúde' },
+    { id: 'laz', name: 'Lazer' }, { id: 'out-desp', name: 'Outros' }
+  ];
+
+  const getCatIds = (name) =>
+    categoriasDesp.filter(c => c.name.toLowerCase() === name.toLowerCase()).map(c => c.id);
+
+  const now = new Date();
 
   // Otimizar filtro de transações mensais com useMemo
   const monthlyTransactions = useMemo(() =>
@@ -1973,6 +1987,47 @@ const Dashboard = React.memo(({ transactions, dueAlerts }) => {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Resumo de Orçamentos */}
+      {budgets.length > 0 && (
+        <div className="dashboard-budgets">
+          <h3 style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+            📊 Orçamentos do Mês
+          </h3>
+          <div className="dashboard-budget-grid">
+            {budgets.filter(b => b.period === 'monthly' || b.period === 'mensal').map(b => {
+              const catIds = getCatIds(b.category);
+              const spent = transactions
+                .filter(t => {
+                  if (t.type !== 'despesa') return false;
+                  if (!catIds.includes(t.category)) return false;
+                  const d = new Date(t.date + (t.date.includes('T') ? '' : 'T00:00:00'));
+                  return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+                })
+                .reduce((s, t) => s + parseFloat(t.value || 0), 0);
+              const limit = parseFloat(b.limit_value);
+              const pct = Math.min((spent / limit) * 100, 100);
+              const over = spent > limit;
+              const catMeta = categoriasDesp.find(c => c.name.toLowerCase() === b.category.toLowerCase());
+              return (
+                <div key={b.id} className={`dashboard-budget-item ${over ? 'over-budget' : ''}`}>
+                  <div className="db-budget-header">
+                    <span className="db-budget-name">{catMeta?.icon ? `${catMeta.icon} ` : ''}{b.category}</span>
+                    <span className={`db-budget-pct ${over ? 'text-danger' : ''}`}>{pct.toFixed(0)}%</span>
+                  </div>
+                  <div className="budget-bar-wrap">
+                    <div className="budget-bar" style={{ width: `${pct}%`, background: over ? '#e74c3c' : pct > 80 ? '#f39c12' : '#2ecc71' }} />
+                  </div>
+                  <div className="db-budget-amounts">
+                    <span className={over ? 'text-danger' : ''}>R$ {spent.toFixed(2)}</span>
+                    <span style={{ color: '#94a3b8' }}>/ R$ {limit.toFixed(2)}</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
 
