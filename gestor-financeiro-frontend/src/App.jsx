@@ -1194,11 +1194,17 @@ const Login = React.memo(({ onLogin, loadingAuth, setLoadingAuth }) => {
 function GerenciarUsuarios() {
   const [users, setUsers] = useState([]);
   const [isAddingUser, setIsAddingUser] = useState(false);
+  const [editingUser, setEditingUser] = useState(null);
   const [loading, setLoading] = useState(false);
   const [newUser, setNewUser] = useState({
     email: '',
     password: '',
     name: ''
+  });
+  const [editForm, setEditForm] = useState({
+    name: '',
+    email: '',
+    password: ''
   });
 
   // Carregar usuários da API
@@ -1249,13 +1255,55 @@ function GerenciarUsuarios() {
         toast.success('Usuário cadastrado com sucesso!');
         setNewUser({ email: '', password: '', name: '' });
         setIsAddingUser(false);
-        loadUsers(); // Recarregar lista
+        loadUsers();
       } else {
         toast.error(data.error || 'Erro ao cadastrar usuário');
       }
     } catch (error) {
       console.error('Erro ao cadastrar usuário:', error);
       toast.error('Erro de conexão ao cadastrar usuário');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Abrir formulário de edição
+  const handleStartEdit = (user) => {
+    setEditingUser(user.id);
+    setEditForm({ name: user.name, email: user.email, password: '' });
+    setIsAddingUser(false);
+  };
+
+  // Salvar edição do usuário
+  const handleUpdateUser = async (e) => {
+    e.preventDefault();
+
+    if (editForm.password && editForm.password.length < 6) {
+      toast.error('A nova senha deve ter pelo menos 6 caracteres!');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const response = await fetch(`${config.API_URL}/admin/users/${editingUser}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(editForm)
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        toast.success('Usuário atualizado com sucesso!');
+        setEditingUser(null);
+        setEditForm({ name: '', email: '', password: '' });
+        loadUsers();
+      } else {
+        toast.error(data.error || 'Erro ao atualizar usuário');
+      }
+    } catch (error) {
+      console.error('Erro ao atualizar usuário:', error);
+      toast.error('Erro de conexão ao atualizar usuário');
     } finally {
       setLoading(false);
     }
@@ -1277,7 +1325,7 @@ function GerenciarUsuarios() {
 
         if (response.ok) {
           toast.success('Usuário removido com sucesso!');
-          loadUsers(); // Recarregar lista
+          loadUsers();
         } else {
           const data = await response.json();
           toast.error(data.error || 'Erro ao remover usuário');
@@ -1297,7 +1345,7 @@ function GerenciarUsuarios() {
 
       <div className="users-actions">
         <button
-          onClick={() => setIsAddingUser(!isAddingUser)}
+          onClick={() => { setIsAddingUser(!isAddingUser); setEditingUser(null); }}
           className="add-user-btn"
         >
           {isAddingUser ? '❌ Cancelar' : '➕ Adicionar Usuário'}
@@ -1356,22 +1404,72 @@ function GerenciarUsuarios() {
         ) : (
           users.map(user => (
             <div key={user.id} className="user-card">
-              <div className="user-info">
-                <h4>{user.name}</h4>
-                <p>{user.email}</p>
-                <small>Cadastrado: {new Date(user.created_at).toLocaleDateString()}</small>
-              </div>
-              <div className="user-actions">
-                {user.email !== 'junior395@gmail.com' && (
-                  <ButtonSpinner
-                    onClick={() => handleRemoveUser(user.id, user.email)}
-                    className="remove-btn"
-                    loading={loading}
-                  >
-                    🗑️ Remover
-                  </ButtonSpinner>
-                )}
-              </div>
+              {editingUser === user.id ? (
+                <form onSubmit={handleUpdateUser} className="edit-user-form">
+                  <h4>✏️ Editar Usuário</h4>
+                  <div className="form-group">
+                    <label>Nome:</label>
+                    <input
+                      type="text"
+                      value={editForm.name}
+                      onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                      required
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>Email:</label>
+                    <input
+                      type="email"
+                      value={editForm.email}
+                      onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
+                      required
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>Nova Senha (deixe em branco para manter):</label>
+                    <input
+                      type="password"
+                      value={editForm.password}
+                      onChange={(e) => setEditForm({ ...editForm, password: e.target.value })}
+                      minLength="6"
+                      placeholder="Deixe em branco para não alterar"
+                    />
+                  </div>
+                  <div className="edit-form-actions">
+                    <ButtonSpinner type="submit" className="submit-btn" loading={loading}>
+                      💾 Salvar
+                    </ButtonSpinner>
+                    <button type="button" onClick={() => setEditingUser(null)} className="cancel-btn">
+                      ❌ Cancelar
+                    </button>
+                  </div>
+                </form>
+              ) : (
+                <>
+                  <div className="user-info">
+                    <h4>{user.name}</h4>
+                    <p>{user.email}</p>
+                    <small>Cadastrado: {new Date(user.created_at).toLocaleDateString()}</small>
+                  </div>
+                  <div className="user-actions">
+                    <button
+                      onClick={() => handleStartEdit(user)}
+                      className="edit-btn"
+                    >
+                      ✏️ Editar
+                    </button>
+                    {user.email !== 'junior395@gmail.com' && (
+                      <ButtonSpinner
+                        onClick={() => handleRemoveUser(user.id, user.email)}
+                        className="remove-btn"
+                        loading={loading}
+                      >
+                        🗑️ Remover
+                      </ButtonSpinner>
+                    )}
+                  </div>
+                </>
+              )}
             </div>
           ))
         )}

@@ -433,6 +433,39 @@ app.get('/admin/users', async (req, res) => {
   }
 });
 
+app.put('/admin/users/:id', async (req, res) => {
+  const { id } = req.params;
+  const { name, email, password } = req.body;
+
+  if (!name || !email) {
+    return res.status(400).json({ error: 'Nome e email são obrigatórios' });
+  }
+
+  try {
+    const userExists = await dbGet('SELECT id FROM users WHERE id = ?', [id]);
+    if (!userExists) {
+      return res.status(404).json({ error: 'Usuário não encontrado' });
+    }
+
+    // Verificar se o novo email já pertence a outro usuário
+    const emailConflict = await dbGet('SELECT id FROM users WHERE email = ? AND id != ?', [email, id]);
+    if (emailConflict) {
+      return res.status(400).json({ error: 'Email já está em uso por outro usuário' });
+    }
+
+    if (password && password.length > 0) {
+      await dbRun('UPDATE users SET name = ?, email = ?, password = ? WHERE id = ?', [name, email, password, id]);
+    } else {
+      await dbRun('UPDATE users SET name = ?, email = ? WHERE id = ?', [name, email, id]);
+    }
+
+    res.json({ message: 'Usuário atualizado com sucesso' });
+  } catch (error) {
+    console.error('Erro ao atualizar usuário:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.delete('/admin/users/:id', async (req, res) => {
   const { id } = req.params;
 
