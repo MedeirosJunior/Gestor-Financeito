@@ -2197,7 +2197,6 @@ function Orcamentos({ budgets, transactions, categories, onAdd, onDelete }) {
     { id: 'mor', name: 'Moradia' }, { id: 'sau', name: 'Saúde' },
     { id: 'laz', name: 'Lazer' }, { id: 'out-desp', name: 'Outros' }
   ]);
-  const categorias = categoriasDesp.map(c => c.name);
   const periodos = [{ value: 'monthly', label: 'Mensal' }, { value: 'annual', label: 'Anual' }];
 
   const now = new Date();
