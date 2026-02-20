@@ -3464,3 +3464,11 @@ button.loading .spinner {
 .annual-table tbody tr:hover {
   background: rgba(102, 126, 234, 0.04);
 }
+
+/* Badge de conta na transação do Histórico */
+.tx-wallet-badge {
+  display: inline;
+  font-size: 0.78rem;
+  color: #8b5cf6;
+  font-weight: 500;
+}

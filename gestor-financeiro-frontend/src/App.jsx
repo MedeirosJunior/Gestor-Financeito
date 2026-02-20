@@ -598,6 +598,22 @@ function App() {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
 
+      // Atualizar saldo da conta vinculada
+      if (transaction.wallet_id) {
+        const wallet = wallets.find(w => w.id === parseInt(transaction.wallet_id));
+        if (wallet) {
+          const delta = transaction.type === 'entrada'
+            ? parseFloat(transaction.value)
+            : -parseFloat(transaction.value);
+          await fetch(`${config.API_URL}/wallets/${wallet.id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ balance: parseFloat(wallet.balance) + delta })
+          });
+          await fetchWallets();
+        }
+      }
+
       await fetchTransactions();
       toast.success(`${transaction.type === 'entrada' ? 'Receita' : 'Despesa'} adicionada com sucesso!`);
     } catch (error) {
@@ -607,7 +623,7 @@ function App() {
     } finally {
       setLoadingTransactions(false);
     }
-  }, [fetchTransactions, categories, isApiAvailable, currentUser]);
+  }, [fetchTransactions, fetchWallets, wallets, categories, isApiAvailable, currentUser]); // eslint-disable-line no-use-before-define
 
   const deleteTransaction = useCallback(async (id) => {
     if (!ValidationUtils.isValidPositiveNumber(id)) {
@@ -644,6 +660,24 @@ function App() {
       }
 
       fetchTransactions();
+
+      // Reverter o saldo da conta vinculada
+      const tx = transactions.find(t => t.id === id);
+      if (tx?.wallet_id) {
+        const wallet = wallets.find(w => w.id === parseInt(tx.wallet_id));
+        if (wallet) {
+          const delta = tx.type === 'entrada'
+            ? -parseFloat(tx.value)
+            : parseFloat(tx.value);
+          await fetch(`${config.API_URL}/wallets/${wallet.id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ balance: parseFloat(wallet.balance) + delta })
+          });
+          await fetchWallets();
+        }
+      }
+
       toast.success('Transação excluída com sucesso!');
     } catch (error) {
       console.error('❌ Erro ao excluir transação via API:', error);
@@ -652,9 +686,9 @@ function App() {
     } finally {
       setLoadingTransactions(false);
     }
-  }, [fetchTransactions, currentUser, isApiAvailable]);
+  }, [fetchTransactions, fetchWallets, wallets, transactions, currentUser, isApiAvailable]); // eslint-disable-line no-use-before-define
 
-  const updateTransaction = useCallback(async (id, transaction) => {
+  const updateTransaction = useCallback(async (id, transaction, oldTransaction) => {
     if (!isApiAvailable) {
       toast.error('Conexão com servidor necessária para editar transações.');
       return;
@@ -668,6 +702,39 @@ function App() {
       });
       const data = await response.json();
       if (response.ok) {
+        // Reverter saldo da conta antiga e aplicar novo saldo, se necessário
+        const oldWalletId = oldTransaction?.wallet_id ? parseInt(oldTransaction.wallet_id) : null;
+        const newWalletId = transaction.wallet_id ? parseInt(transaction.wallet_id) : null;
+        const oldValue = oldTransaction ? parseFloat(oldTransaction.value) : 0;
+        const newValue = parseFloat(transaction.value);
+
+        if (oldWalletId || newWalletId) {
+          // Reverter efeito antigo
+          if (oldWalletId) {
+            const oldWallet = wallets.find(w => w.id === oldWalletId);
+            if (oldWallet) {
+              const reversal = oldTransaction.type === 'entrada' ? -oldValue : oldValue;
+              await fetch(`${config.API_URL}/wallets/${oldWalletId}`, {
+                method: 'PUT', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ balance: parseFloat(oldWallet.balance) + reversal })
+              });
+            }
+          }
+          // Aplicar efeito novo (busca saldo atualizado)
+          if (newWalletId) {
+            const freshWallets = await fetch(`${config.API_URL}/wallets?userId=${encodeURIComponent(currentUser.email)}`).then(r => r.json()).catch(() => wallets);
+            const newWallet = freshWallets.find(w => w.id === newWalletId);
+            if (newWallet) {
+              const delta = transaction.type === 'entrada' ? newValue : -newValue;
+              await fetch(`${config.API_URL}/wallets/${newWalletId}`, {
+                method: 'PUT', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ balance: parseFloat(newWallet.balance) + delta })
+              });
+            }
+          }
+          await fetchWallets();
+        }
+
         await fetchTransactions();
         toast.success('Transação atualizada com sucesso!');
         return true;
@@ -682,7 +749,7 @@ function App() {
     } finally {
       setLoadingTransactions(false);
     }
-  }, [fetchTransactions, currentUser, isApiAvailable]);
+  }, [fetchTransactions, fetchWallets, wallets, currentUser, isApiAvailable]); // eslint-disable-line no-use-before-define
 
   const handleLogin = useCallback((user) => {
     console.log('🔐 HandleLogin chamado com:', user);
@@ -1249,6 +1316,7 @@ function App() {
               title="💵 Lançar Entrada"
               categories={categories}
               isApiAvailable={isApiAvailable}
+              wallets={wallets}
             />
           )}
           {activeTab === 'despesas' && (
@@ -1258,6 +1326,7 @@ function App() {
               title="💸 Lançar Despesa"
               categories={categories}
               isApiAvailable={isApiAvailable}
+              wallets={wallets}
             />
           )}
           {activeTab === 'relatorios' && (
@@ -1274,6 +1343,7 @@ function App() {
               onUpdate={updateTransaction}
               isApiAvailable={isApiAvailable}
               categories={categories}
+              wallets={wallets}
             />
           )}
           {activeTab === 'recorrentes' && (
@@ -2817,12 +2887,13 @@ function Metas({ goals, onAdd, onUpdate, onDelete }) {
 }
 
 // Formulário de lançamento otimizado
-const LancamentoForm = React.memo(({ type, onAdd, title, categories, isApiAvailable }) => {
+const LancamentoForm = React.memo(({ type, onAdd, title, categories, isApiAvailable, wallets = [] }) => {
   const [form, setForm] = useState({
     description: '',
     value: '',
     category: '',
-    date: new Date().toISOString().slice(0, 10)
+    date: new Date().toISOString().slice(0, 10),
+    wallet_id: ''
   });
 
   // Usar categorias dinâmicas
@@ -2852,14 +2923,16 @@ const LancamentoForm = React.memo(({ type, onAdd, title, categories, isApiAvaila
     onAdd({
       ...form,
       type,
-      value: parseFloat(form.value)
+      value: parseFloat(form.value),
+      wallet_id: form.wallet_id ? parseInt(form.wallet_id) : null
     });
 
     setForm({
       description: '',
       value: '',
       category: '',
-      date: new Date().toISOString().slice(0, 10)
+      date: new Date().toISOString().slice(0, 10),
+      wallet_id: ''
     });
   }, [form, type, onAdd, isApiAvailable]);
 
@@ -2926,6 +2999,24 @@ const LancamentoForm = React.memo(({ type, onAdd, title, categories, isApiAvaila
             required
           />
         </div>
+
+        {wallets.length > 0 && (
+          <div className="form-group">
+            <label>Conta / Carteira: <small style={{ color: '#94a3b8' }}>(opcional)</small></label>
+            <select
+              value={form.wallet_id}
+              onChange={e => setForm({ ...form, wallet_id: e.target.value })}
+              disabled={!isApiAvailable}
+            >
+              <option value="">Sem conta vinculada</option>
+              {wallets.map(w => (
+                <option key={w.id} value={w.id}>
+                  {w.name} — R$ {parseFloat(w.balance || 0).toFixed(2)}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
 
         <button
           type="submit"
@@ -3221,13 +3312,13 @@ function Relatorios({ transactions, loadingExport, setLoadingExport }) {
 }
 
 // Histórico de transações otimizado
-const Historico = React.memo(({ transactions, onDelete, onUpdate, isApiAvailable, categories }) => {
+const Historico = React.memo(({ transactions, onDelete, onUpdate, isApiAvailable, categories, wallets = [] }) => {
   const [filter, setFilter] = useState('all');
   const [monthFilter, setMonthFilter] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
   const [editingId, setEditingId] = useState(null);
-  const [editForm, setEditForm] = useState({ type: '', description: '', category: '', value: '', date: '' });
+  const [editForm, setEditForm] = useState({ type: '', description: '', category: '', value: '', date: '', wallet_id: '' });
 
   // Implementar debounce na busca
   const debouncedSearchTerm = useDebounce(searchTerm, 300);
@@ -3255,13 +3346,14 @@ const Historico = React.memo(({ transactions, onDelete, onUpdate, isApiAvailable
       description: transaction.description,
       category: transaction.category,
       value: transaction.value,
-      date: transaction.date
+      date: transaction.date,
+      wallet_id: transaction.wallet_id ? String(transaction.wallet_id) : ''
     });
   };
 
   const cancelEdit = () => {
     setEditingId(null);
-    setEditForm({ type: '', description: '', category: '', value: '', date: '' });
+    setEditForm({ type: '', description: '', category: '', value: '', date: '', wallet_id: '' });
   };
 
   const handleUpdate = async (e) => {
@@ -3270,7 +3362,12 @@ const Historico = React.memo(({ transactions, onDelete, onUpdate, isApiAvailable
       toast.error('Preencha todos os campos!');
       return;
     }
-    const success = await onUpdate(editingId, { ...editForm, value: parseFloat(editForm.value) });
+    const oldTx = transactions.find(t => t.id === editingId);
+    const success = await onUpdate(
+      editingId,
+      { ...editForm, value: parseFloat(editForm.value), wallet_id: editForm.wallet_id ? parseInt(editForm.wallet_id) : null },
+      oldTx
+    );
     if (success) cancelEdit();
   };
 
@@ -3402,6 +3499,17 @@ const Historico = React.memo(({ transactions, onDelete, onUpdate, isApiAvailable
                     onChange={e => setEditForm({ ...editForm, date: e.target.value })}
                     required
                   />
+                  {wallets.length > 0 && (
+                    <select
+                      value={editForm.wallet_id}
+                      onChange={e => setEditForm({ ...editForm, wallet_id: e.target.value })}
+                    >
+                      <option value="">Sem conta vinculada</option>
+                      {wallets.map(w => (
+                        <option key={w.id} value={w.id}>{w.name}</option>
+                      ))}
+                    </select>
+                  )}
                 </div>
                 <div className="edit-form-actions">
                   <button type="submit" className="submit-btn">💾 Salvar</button>
@@ -3412,7 +3520,12 @@ const Historico = React.memo(({ transactions, onDelete, onUpdate, isApiAvailable
               <>
                 <div className="transaction-info">
                   <h4>{transaction.description}</h4>
-                  <p>{transaction.category}</p>
+                  <p>{transaction.category}
+                    {transaction.wallet_id && wallets.length > 0 && (() => {
+                      const w = wallets.find(ww => ww.id === parseInt(transaction.wallet_id));
+                      return w ? <span className="tx-wallet-badge"> • 🏦 {w.name}</span> : null;
+                    })()}
+                  </p>
                   <span className="date">{new Date(transaction.date).toLocaleDateString('pt-BR')}</span>
                 </div>
                 <div className="transaction-value">

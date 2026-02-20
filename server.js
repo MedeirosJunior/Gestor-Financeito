@@ -127,6 +127,7 @@ const initializeDatabase = async () => {
         value REAL NOT NULL,
         date DATE NOT NULL,
         userId TEXT NOT NULL,
+        wallet_id INTEGER,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       )
     `);
@@ -209,6 +210,8 @@ const initializeDatabase = async () => {
     // Criar índices para melhor performance
     await dbRun(`CREATE INDEX IF NOT EXISTS idx_transactions_userid ON transactions(userId)`);
     await dbRun(`CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions(date)`);
+    // Adicionar wallet_id se não existir (migração de BDs antigos)
+    await dbRun(`ALTER TABLE transactions ADD COLUMN wallet_id INTEGER`).catch(() => { });
     await dbRun(`CREATE INDEX IF NOT EXISTS idx_categories_userid ON categories(userId)`);
     await dbRun(`CREATE INDEX IF NOT EXISTS idx_recurring_userid ON recurring_expenses(userId)`);
     await dbRun(`CREATE INDEX IF NOT EXISTS idx_budgets_userid ON budgets(userId)`);
@@ -286,7 +289,7 @@ app.get('/transactions', async (req, res) => {
 });
 
 app.post('/transactions', async (req, res) => {
-  const { type, description, category, value, date, userId } = req.body;
+  const { type, description, category, value, date, userId, wallet_id } = req.body;
 
   if (!type || !description || !category || !value || !date || !userId) {
     return res.status(400).json({ error: 'Todos os campos são obrigatórios' });
@@ -294,8 +297,8 @@ app.post('/transactions', async (req, res) => {
 
   try {
     const result = await dbRun(
-      'INSERT INTO transactions (type, description, category, value, date, userId) VALUES (?, ?, ?, ?, ?, ?)',
-      [type, description, category, value, date, userId]
+      'INSERT INTO transactions (type, description, category, value, date, userId, wallet_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [type, description, category, value, date, userId, wallet_id || null]
     );
 
     // Fazer backup após inserção
@@ -313,7 +316,7 @@ app.post('/transactions', async (req, res) => {
 
 app.put('/transactions/:id', async (req, res) => {
   const { id } = req.params;
-  const { type, description, category, value, date, userId } = req.body;
+  const { type, description, category, value, date, userId, wallet_id } = req.body;
 
   if (!type || !description || !category || !value || !date || !userId) {
     return res.status(400).json({ error: 'Todos os campos são obrigatórios' });
@@ -328,8 +331,8 @@ app.put('/transactions/:id', async (req, res) => {
       return res.status(403).json({ error: 'Sem permissão para editar esta transação' });
     }
     await dbRun(
-      'UPDATE transactions SET type = ?, description = ?, category = ?, value = ?, date = ? WHERE id = ?',
-      [type, description, category, parseFloat(value), date, id]
+      'UPDATE transactions SET type = ?, description = ?, category = ?, value = ?, date = ?, wallet_id = ? WHERE id = ?',
+      [type, description, category, parseFloat(value), date, wallet_id || null, id]
     );
     res.json({ message: 'Transação atualizada com sucesso' });
   } catch (error) {
@@ -805,7 +808,11 @@ app.put('/wallets/:id', async (req, res) => {
   const { id } = req.params;
   const { name, balance, is_active } = req.body;
   try {
-    await dbRun('UPDATE wallets SET name = ?, balance = ?, is_active = ? WHERE id = ?', [name, balance, is_active ?? 1, id]);
+    // COALESCE mantém o valor existente quando o campo não é enviado
+    await dbRun(
+      'UPDATE wallets SET name = COALESCE(?, name), balance = COALESCE(?, balance), is_active = COALESCE(?, is_active) WHERE id = ?',
+      [name ?? null, balance ?? null, is_active ?? null, id]
+    );
     res.json({ message: 'Carteira atualizada com sucesso' });
   } catch (error) {
     console.error('Erro ao atualizar carteira:', error);
