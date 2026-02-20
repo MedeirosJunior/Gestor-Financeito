@@ -800,6 +800,9 @@ app.post('/wallets', async (req, res) => {
     res.json({ id: result.id, message: 'Carteira criada com sucesso' });
   } catch (error) {
     console.error('Erro ao criar carteira:', error);
+    if (error.message && error.message.includes('UNIQUE')) {
+      return res.status(409).json({ error: `Você já possui uma conta com o nome "${name}". Use um nome diferente.` });
+    }
     res.status(500).json({ error: error.message });
   }
 });
