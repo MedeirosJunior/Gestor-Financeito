@@ -3265,11 +3265,13 @@ button.loading .spinner {
   padding: 18px 20px;
   margin-bottom: 20px;
 }
+
 .dashboard-budget-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
   gap: 16px;
 }
+
 .dashboard-budget-item {
   background: #f8fafc;
   border: 1px solid #e2e8f0;
@@ -3277,25 +3279,30 @@ button.loading .spinner {
   padding: 12px 14px;
   transition: border-color 0.2s;
 }
+
 .dashboard-budget-item.over-budget {
   border-left: 3px solid #e74c3c;
   background: #fff5f5;
 }
+
 .db-budget-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 8px;
 }
+
 .db-budget-name {
   font-weight: 600;
   font-size: 14px;
 }
+
 .db-budget-pct {
   font-size: 12px;
   font-weight: 700;
   color: #64748b;
 }
+
 .db-budget-amounts {
   display: flex;
   gap: 4px;
