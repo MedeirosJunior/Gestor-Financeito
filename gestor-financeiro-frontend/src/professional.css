@@ -190,12 +190,12 @@ body {
 
 /* Header Controls - Contém status e user-info */
 .header-controls {
-    display: flex;
-    justify-content: flex-end;
-    align-items: center;
+    display: flex !important;
+    flex-direction: row !important;
+    justify-content: flex-end !important;
+    align-items: center !important;
     gap: 12px;
     flex: 0 0 auto;
-    flex-direction: row;
     width: auto;
 }
 
@@ -228,12 +228,13 @@ body {
 
 /* User Info - Contém usuário, botões */
 .user-info {
-    display: flex;
-    align-items: center;
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
     gap: 8px;
     padding-left: 0;
     border-left: none;
-    flex-wrap: nowrap;
+    flex-wrap: nowrap !important;
     order: 2;
     width: auto;
 }
