@@ -605,12 +605,13 @@ function App() {
           const delta = transaction.type === 'entrada'
             ? parseFloat(transaction.value)
             : -parseFloat(transaction.value);
+          const newBalance = parseFloat(wallet.balance) + delta;
           await fetch(`${config.API_URL}/wallets/${wallet.id}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ balance: parseFloat(wallet.balance) + delta })
+            body: JSON.stringify({ balance: newBalance })
           });
-          await fetchWallets();
+          setWallets(prev => prev.map(w => w.id === wallet.id ? { ...w, balance: newBalance } : w));
         }
       }
 
@@ -623,7 +624,7 @@ function App() {
     } finally {
       setLoadingTransactions(false);
     }
-  }, [fetchTransactions, fetchWallets, wallets, categories, isApiAvailable, currentUser]); // eslint-disable-line no-use-before-define
+  }, [fetchTransactions, wallets, categories, isApiAvailable, currentUser]);
 
   const deleteTransaction = useCallback(async (id) => {
     if (!ValidationUtils.isValidPositiveNumber(id)) {
@@ -669,12 +670,13 @@ function App() {
           const delta = tx.type === 'entrada'
             ? -parseFloat(tx.value)
             : parseFloat(tx.value);
+          const newBalance = parseFloat(wallet.balance) + delta;
           await fetch(`${config.API_URL}/wallets/${wallet.id}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ balance: parseFloat(wallet.balance) + delta })
+            body: JSON.stringify({ balance: newBalance })
           });
-          await fetchWallets();
+          setWallets(prev => prev.map(w => w.id === wallet.id ? { ...w, balance: newBalance } : w));
         }
       }
 
@@ -686,7 +688,7 @@ function App() {
     } finally {
       setLoadingTransactions(false);
     }
-  }, [fetchTransactions, fetchWallets, wallets, transactions, currentUser, isApiAvailable]); // eslint-disable-line no-use-before-define
+  }, [fetchTransactions, wallets, transactions, currentUser, isApiAvailable]);
 
   const updateTransaction = useCallback(async (id, transaction, oldTransaction) => {
     if (!isApiAvailable) {
@@ -709,30 +711,38 @@ function App() {
         const newValue = parseFloat(transaction.value);
 
         if (oldWalletId || newWalletId) {
+          // Calcular novos saldos diretamente no estado local
+          const updatedWallets = [...wallets];
+
           // Reverter efeito antigo
           if (oldWalletId) {
-            const oldWallet = wallets.find(w => w.id === oldWalletId);
+            const oldWallet = updatedWallets.find(w => w.id === oldWalletId);
             if (oldWallet) {
               const reversal = oldTransaction.type === 'entrada' ? -oldValue : oldValue;
+              const newBal = parseFloat(oldWallet.balance) + reversal;
               await fetch(`${config.API_URL}/wallets/${oldWalletId}`, {
                 method: 'PUT', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ balance: parseFloat(oldWallet.balance) + reversal })
+                body: JSON.stringify({ balance: newBal })
               });
+              oldWallet.balance = newBal;
             }
           }
-          // Aplicar efeito novo (busca saldo atualizado)
+
+          // Aplicar efeito novo
           if (newWalletId) {
-            const freshWallets = await fetch(`${config.API_URL}/wallets?userId=${encodeURIComponent(currentUser.email)}`).then(r => r.json()).catch(() => wallets);
-            const newWallet = freshWallets.find(w => w.id === newWalletId);
+            const newWallet = updatedWallets.find(w => w.id === newWalletId);
             if (newWallet) {
               const delta = transaction.type === 'entrada' ? newValue : -newValue;
+              const newBal = parseFloat(newWallet.balance) + delta;
               await fetch(`${config.API_URL}/wallets/${newWalletId}`, {
                 method: 'PUT', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ balance: parseFloat(newWallet.balance) + delta })
+                body: JSON.stringify({ balance: newBal })
               });
+              newWallet.balance = newBal;
             }
           }
-          await fetchWallets();
+
+          setWallets([...updatedWallets]);
         }
 
         await fetchTransactions();
@@ -749,7 +759,7 @@ function App() {
     } finally {
       setLoadingTransactions(false);
     }
-  }, [fetchTransactions, fetchWallets, wallets, currentUser, isApiAvailable]); // eslint-disable-line no-use-before-define
+  }, [fetchTransactions, wallets, currentUser, isApiAvailable]);
 
   const handleLogin = useCallback((user) => {
     console.log('🔐 HandleLogin chamado com:', user);
