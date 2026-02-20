@@ -268,7 +268,28 @@ body {
     }
 }
 
-/* Botões do Header */\n.user-info button {\n    padding: 8px 12px;\n    background: var(--color-bg-secondary);\n    color: var(--color-text-primary);\n    border: 1px solid var(--color-border);\n    border-radius: 6px;\n    font-size: 0.75rem;\n    font-weight: 700;\n    cursor: pointer;\n    transition: all var(--transition-base);\n    white-space: nowrap;\n    min-height: 36px;\n    display: flex;\n    align-items: center;\n    justify-content: center;\n    gap: 4px;\n    text-transform: uppercase;\n    letter-spacing: 0.05em;\n    flex: 0 0 auto;\n}
+/* Botões do Header */
+\n.user-info button {
+    \n padding: 8px 12px;
+    \n background: var(--color-bg-secondary);
+    \n color: var(--color-text-primary);
+    \n border: 1px solid var(--color-border);
+    \n border-radius: 6px;
+    \n font-size: 0.75rem;
+    \n font-weight: 700;
+    \n cursor: pointer;
+    \n transition: all var(--transition-base);
+    \n white-space: nowrap;
+    \n min-height: 36px;
+    \n display: flex;
+    \n align-items: center;
+    \n justify-content: center;
+    \n gap: 4px;
+    \n text-transform: uppercase;
+    \n letter-spacing: 0.05em;
+    \n flex: 0 0 auto;
+    \n
+}
 
 .user-info button:hover {
     background: var(--color-primary);
