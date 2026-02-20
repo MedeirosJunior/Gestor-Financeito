@@ -1013,61 +1013,8 @@ function App() {
     const res = await fetch(`${config.API_URL}/goals/${id}`, { method: 'DELETE' });
     if (res.ok) { await fetchGoals(); toast.success('Meta removida!'); }
   }, [fetchGoals]);
-  const start = new Date(startDate);
-  const today = new Date();
-  let nextDue = new Date(start);
 
-  while (nextDue <= today) {
-    switch (recurrence) {
-      case 'monthly':
-        nextDue.setMonth(nextDue.getMonth() + 1);
-        break;
-      case 'bimonthly':
-        nextDue.setMonth(nextDue.getMonth() + 2);
-        break;
-      case 'quarterly':
-        nextDue.setMonth(nextDue.getMonth() + 3);
-        break;
-      case 'semiannual':
-        nextDue.setMonth(nextDue.getMonth() + 6);
-        break;
-      case 'annual':
-        nextDue.setFullYear(nextDue.getFullYear() + 1);
-        break;
-      case 'fifth-business-day':
-        nextDue = calculateFifthBusinessDay(nextDue);
-        break;
-      default:
-        nextDue.setMonth(nextDue.getMonth() + 1);
-    }
-  }
-  return nextDue.toISOString().split('T')[0];
-};
-
-const calculateFifthBusinessDay = (date) => {
-  const year = date.getFullYear();
-  const month = date.getMonth();
-  let businessDays = 0;
-  let day = 1;
-
-  while (businessDays < 5) {
-    const currentDate = new Date(year, month, day);
-    const dayOfWeek = currentDate.getDay();
-
-    if (dayOfWeek !== 0 && dayOfWeek !== 6) {
-      businessDays++;
-    }
-
-    if (businessDays < 5) {
-      day++;
-    }
-  }
-
-  let nextMonth = new Date(year, month + 1, day);
-  return nextMonth;
-};
-
-const checkDueExpenses = (expenses) => {
+  const checkDueExpenses = (expenses) => {
   const today = new Date();
   const alerts = [];
 
