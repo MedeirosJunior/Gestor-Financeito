@@ -1015,250 +1015,251 @@ function App() {
   }, [fetchGoals]);
 
   const checkDueExpenses = (expenses) => {
-  const today = new Date();
-  const alerts = [];
+    const today = new Date();
+    const alerts = [];
 
-  expenses.forEach(expense => {
-    const dueDate = new Date(expense.nextDue);
-    const diffTime = dueDate - today;
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    expenses.forEach(expense => {
+      const dueDate = new Date(expense.nextDue);
+      const diffTime = dueDate - today;
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
-    if (diffDays <= 7 && diffDays >= 0) {
-      alerts.push({
-        ...expense,
-        daysUntilDue: diffDays
-      });
-    } else if (diffDays < 0) {
-      alerts.push({
-        ...expense,
-        daysUntilDue: diffDays,
-        overdue: true
-      });
-    }
-  });
+      if (diffDays <= 7 && diffDays >= 0) {
+        alerts.push({
+          ...expense,
+          daysUntilDue: diffDays
+        });
+      } else if (diffDays < 0) {
+        alerts.push({
+          ...expense,
+          daysUntilDue: diffDays,
+          overdue: true
+        });
+      }
+    });
 
-  setDueAlerts(alerts);
-};
+    setDueAlerts(alerts);
+  };
 
-const isAdmin = currentUser?.email === 'junior395@gmail.com';
+  const isAdmin = currentUser?.email === 'junior395@gmail.com';
 
-// Se não estiver autenticado, mostrar tela de login
-if (!isAuthenticated) {
+  // Se não estiver autenticado, mostrar tela de login
+  if (!isAuthenticated) {
+    return (
+      <Login
+        onLogin={handleLogin}
+        loadingAuth={loadingAuth}
+        setLoadingAuth={setLoadingAuth}
+      />
+    );
+  }
+
   return (
-    <Login
-      onLogin={handleLogin}
-      loadingAuth={loadingAuth}
-      setLoadingAuth={setLoadingAuth}
-    />
-  );
-}
-
-return (
-  <div className={`app${darkMode ? ' dark-mode' : ''}`}>
-    <LoadingOverlay
-      show={loadingTransactions}
-      message="Processando transação..."
-    />
-    <LoadingOverlay
-      show={loadingRecurring}
-      message="Processando despesa recorrente..."
-    />
-    <header className="header">
-      <div className="header-top">
-        <h1>💰 Gestor Financeiro</h1>
-        <div className="header-controls">
-          <div className="connectivity-status">
-            {apiChecked && (
-              <span className={`status-indicator ${isApiAvailable ? 'online' : 'offline'}`}>
-                {isApiAvailable ? '🟢 Online' : '🔴 Offline'}
-              </span>
-            )}
-          </div>
-          <div className="user-info">
-            <span>👤 {currentUser?.name || currentUser?.username}</span>
-            {isAdmin && (
+    <div className={`app${darkMode ? ' dark-mode' : ''}`}>
+      <LoadingOverlay
+        show={loadingTransactions}
+        message="Processando transação..."
+      />
+      <LoadingOverlay
+        show={loadingRecurring}
+        message="Processando despesa recorrente..."
+      />
+      <header className="header">
+        <div className="header-top">
+          <h1>💰 Gestor Financeiro</h1>
+          <div className="header-controls">
+            <div className="connectivity-status">
+              {apiChecked && (
+                <span className={`status-indicator ${isApiAvailable ? 'online' : 'offline'}`}>
+                  {isApiAvailable ? '🟢 Online' : '🔴 Offline'}
+                </span>
+              )}
+            </div>
+            <div className="user-info">
+              <span>👤 {currentUser?.name || currentUser?.username}</span>
+              {isAdmin && (
+                <button
+                  className={activeTab === 'usuarios' ? 'active' : ''}
+                  onClick={() => setActiveTab('usuarios')}
+                  title="Gerenciar Usuários"
+                >
+                  👥 Usuários
+                </button>
+              )}
               <button
-                className={activeTab === 'usuarios' ? 'active' : ''}
-                onClick={() => setActiveTab('usuarios')}
-                title="Gerenciar Usuários"
+                className="logout-btn"
+                onClick={handleLogout}
+                title="Sair"
               >
-                👥 Usuários
+                🚪 Sair
               </button>
-            )}
-            <button
-              className="logout-btn"
-              onClick={handleLogout}
-              title="Sair"
-            >
-              🚪 Sair
-            </button>
-            <button
-              className="darkmode-btn"
-              onClick={() => setDarkMode(dm => !dm)}
-              title={darkMode ? 'Modo Claro' : 'Modo Escuro'}
-              style={{ marginLeft: '10px' }}
-            >
-              {darkMode ? '🌙' : '☀️'}
-            </button>
+              <button
+                className="darkmode-btn"
+                onClick={() => setDarkMode(dm => !dm)}
+                title={darkMode ? 'Modo Claro' : 'Modo Escuro'}
+                style={{ marginLeft: '10px' }}
+              >
+                {darkMode ? '🌙' : '☀️'}
+              </button>
+            </div>
           </div>
         </div>
-      </div>
-      <nav className="nav">
-        <button
-          className={activeTab === 'dashboard' ? 'active' : ''}
-          onClick={() => setActiveTab('dashboard')}
-        >
-          📊 Dashboard
-        </button>
-        <button
-          className={activeTab === 'entradas' ? 'active' : ''}
-          onClick={() => setActiveTab('entradas')}
-        >
-          💵 Entradas
-        </button>
-        <button
-          className={activeTab === 'despesas' ? 'active' : ''}
-          onClick={() => setActiveTab('despesas')}
-        >
-          💸 Despesas
-        </button>
-        <button
-          className={activeTab === 'relatorios' ? 'active' : ''}
-          onClick={() => setActiveTab('relatorios')}
-        >
-          📈 Relatórios
-        </button>
-        <button
-          className={activeTab === 'historico' ? 'active' : ''}
-          onClick={() => setActiveTab('historico')}
-        >
-          📋 Histórico
-        </button>
-        <button
-          className={activeTab === 'recorrentes' ? 'active' : ''}
-          onClick={() => setActiveTab('recorrentes')}
-        >
-          🔄 Recorrentes
-        </button>
-        <button
-          className={activeTab === 'categorias' ? 'active' : ''}
-          onClick={() => setActiveTab('categorias')}
-        >
-          🏷️ Categorias
-        </button>
-        <button
-          className={activeTab === 'orcamentos' ? 'active' : ''}
-          onClick={() => setActiveTab('orcamentos')}
-        >
-          🎯 Orçamentos
-        </button>
-        <button
-          className={activeTab === 'contas' ? 'active' : ''}
-          onClick={() => setActiveTab('contas')}
-        >
-          🏦 Contas
-        </button>
-        <button
-          className={activeTab === 'metas' ? 'active' : ''}
-          onClick={() => setActiveTab('metas')}
-        >
-          🏆 Metas
-        </button>
-      </nav>
-    </header>
-    <main className="main">
-      {loading && <div className="loading">Carregando...</div>}
-      <Suspense fallback={<SuspenseLoader message="Carregando aba..." />}>
-        {activeTab === 'dashboard' && (
-          <Dashboard
-            transactions={transactions}
-            dueAlerts={dueAlerts}
-          />
-        )}
-        {activeTab === 'entradas' && (
-          <LancamentoForm
-            type="entrada"
-            onAdd={addTransaction}
-            title="💵 Lançar Entrada"
-            categories={categories}
-            isApiAvailable={isApiAvailable}
-          />
-        )}
-        {activeTab === 'despesas' && (
-          <LancamentoForm
-            type="despesa"
-            onAdd={addTransaction}
-            title="💸 Lançar Despesa"
-            categories={categories}
-            isApiAvailable={isApiAvailable}
-          />
-        )}
-        {activeTab === 'relatorios' && (
-          <Relatorios
-            transactions={transactions}
-            loadingExport={loadingExport}
-            setLoadingExport={setLoadingExport}
-          />
-        )}
-        {activeTab === 'historico' && (
-          <Historico
-            transactions={transactions}
-            onDelete={deleteTransaction}
-            onUpdate={updateTransaction}
-            isApiAvailable={isApiAvailable}
-            categories={categories}
-          />
-        )}
-        {activeTab === 'recorrentes' && (
-          <DespesasRecorrentes
-            expenses={recurringExpenses}
-            onAdd={addRecurringExpense}
-            onDelete={deleteRecurringExpense}
-            onPay={payRecurringExpense}
-            onUpdate={updateRecurringExpense}
-          />
-        )}
-        {activeTab === 'orcamentos' && (
-          <Orcamentos
-            budgets={budgets}
-            transactions={transactions}
-            onAdd={addBudget}
-            onDelete={deleteBudget}
-          />
-        )}
-        {activeTab === 'contas' && (
-          <Contas
-            wallets={wallets}
-            onAdd={addWallet}
-            onUpdate={updateWallet}
-            onDelete={deleteWallet}
-          />
-        )}
-        {activeTab === 'metas' && (
-          <Metas
-            goals={goals}
-            onAdd={addGoal}
-            onUpdate={updateGoal}
-            onDelete={deleteGoal}
-          />
-        )}
-        {activeTab === 'categorias' && (
-          <CategoryManagement
-            categories={categories}
-            onAddCategory={addCustomCategory}
-            onUpdateCategory={updateCustomCategory}
-            onDeleteCategory={deleteCustomCategory}
-          />
-        )}
-        {activeTab === 'usuarios' && isAdmin && (
-          <GerenciarUsuarios />
-        )}
-      </Suspense>
-    </main>
+        <nav className="nav">
+          <button
+            className={activeTab === 'dashboard' ? 'active' : ''}
+            onClick={() => setActiveTab('dashboard')}
+          >
+            📊 Dashboard
+          </button>
+          <button
+            className={activeTab === 'entradas' ? 'active' : ''}
+            onClick={() => setActiveTab('entradas')}
+          >
+            💵 Entradas
+          </button>
+          <button
+            className={activeTab === 'despesas' ? 'active' : ''}
+            onClick={() => setActiveTab('despesas')}
+          >
+            💸 Despesas
+          </button>
+          <button
+            className={activeTab === 'relatorios' ? 'active' : ''}
+            onClick={() => setActiveTab('relatorios')}
+          >
+            📈 Relatórios
+          </button>
+          <button
+            className={activeTab === 'historico' ? 'active' : ''}
+            onClick={() => setActiveTab('historico')}
+          >
+            📋 Histórico
+          </button>
+          <button
+            className={activeTab === 'recorrentes' ? 'active' : ''}
+            onClick={() => setActiveTab('recorrentes')}
+          >
+            🔄 Recorrentes
+          </button>
+          <button
+            className={activeTab === 'categorias' ? 'active' : ''}
+            onClick={() => setActiveTab('categorias')}
+          >
+            🏷️ Categorias
+          </button>
+          <button
+            className={activeTab === 'orcamentos' ? 'active' : ''}
+            onClick={() => setActiveTab('orcamentos')}
+          >
+            🎯 Orçamentos
+          </button>
+          <button
+            className={activeTab === 'contas' ? 'active' : ''}
+            onClick={() => setActiveTab('contas')}
+          >
+            🏦 Contas
+          </button>
+          <button
+            className={activeTab === 'metas' ? 'active' : ''}
+            onClick={() => setActiveTab('metas')}
+          >
+            🏆 Metas
+          </button>
+        </nav>
+      </header>
+      <main className="main">
+        {loading && <div className="loading">Carregando...</div>}
+        <Suspense fallback={<SuspenseLoader message="Carregando aba..." />}>
+          {activeTab === 'dashboard' && (
+            <Dashboard
+              transactions={transactions}
+              dueAlerts={dueAlerts}
+            />
+          )}
+          {activeTab === 'entradas' && (
+            <LancamentoForm
+              type="entrada"
+              onAdd={addTransaction}
+              title="💵 Lançar Entrada"
+              categories={categories}
+              isApiAvailable={isApiAvailable}
+            />
+          )}
+          {activeTab === 'despesas' && (
+            <LancamentoForm
+              type="despesa"
+              onAdd={addTransaction}
+              title="💸 Lançar Despesa"
+              categories={categories}
+              isApiAvailable={isApiAvailable}
+            />
+          )}
+          {activeTab === 'relatorios' && (
+            <Relatorios
+              transactions={transactions}
+              loadingExport={loadingExport}
+              setLoadingExport={setLoadingExport}
+            />
+          )}
+          {activeTab === 'historico' && (
+            <Historico
+              transactions={transactions}
+              onDelete={deleteTransaction}
+              onUpdate={updateTransaction}
+              isApiAvailable={isApiAvailable}
+              categories={categories}
+            />
+          )}
+          {activeTab === 'recorrentes' && (
+            <DespesasRecorrentes
+              expenses={recurringExpenses}
+              onAdd={addRecurringExpense}
+              onDelete={deleteRecurringExpense}
+              onPay={payRecurringExpense}
+              onUpdate={updateRecurringExpense}
+            />
+          )}
+          {activeTab === 'orcamentos' && (
+            <Orcamentos
+              budgets={budgets}
+              transactions={transactions}
+              categories={categories}
+              onAdd={addBudget}
+              onDelete={deleteBudget}
+            />
+          )}
+          {activeTab === 'contas' && (
+            <Contas
+              wallets={wallets}
+              onAdd={addWallet}
+              onUpdate={updateWallet}
+              onDelete={deleteWallet}
+            />
+          )}
+          {activeTab === 'metas' && (
+            <Metas
+              goals={goals}
+              onAdd={addGoal}
+              onUpdate={updateGoal}
+              onDelete={deleteGoal}
+            />
+          )}
+          {activeTab === 'categorias' && (
+            <CategoryManagement
+              categories={categories}
+              onAddCategory={addCustomCategory}
+              onUpdateCategory={updateCustomCategory}
+              onDeleteCategory={deleteCustomCategory}
+            />
+          )}
+          {activeTab === 'usuarios' && isAdmin && (
+            <GerenciarUsuarios />
+          )}
+        </Suspense>
+      </main>
 
-    <ToastContainer />
-  </div>
-);
+      <ToastContainer />
+    </div>
+  );
 }
 
 // Componentes de Loading
@@ -2186,24 +2187,37 @@ function DespesasRecorrentes({ expenses, onAdd, onDelete, onPay, onUpdate }) {
 
 
 // Componente Orçamentos
-function Orcamentos({ budgets, transactions, onAdd, onDelete }) {
+function Orcamentos({ budgets, transactions, categories, onAdd, onDelete }) {
   const [form, setForm] = useState({ category: '', limit_value: '', period: 'monthly' });
   const [showForm, setShowForm] = useState(false);
 
-  const categorias = ['Alimentação', 'Transporte', 'Moradia', 'Saúde', 'Lazer', 'Outros'];
+  // Categorias de despesa disponíveis (padrão + customizadas)
+  const categoriasDesp = (categories?.despesa || [
+    { id: 'alim', name: 'Alimentação' }, { id: 'trans', name: 'Transporte' },
+    { id: 'mor', name: 'Moradia' }, { id: 'sau', name: 'Saúde' },
+    { id: 'laz', name: 'Lazer' }, { id: 'out-desp', name: 'Outros' }
+  ]);
+  const categorias = categoriasDesp.map(c => c.name);
   const periodos = [{ value: 'monthly', label: 'Mensal' }, { value: 'annual', label: 'Anual' }];
 
   const now = new Date();
-  const getSpent = (cat, period) => {
+
+  // Retorna os IDs de categoria que correspondem ao nome do orçamento
+  const getCatIds = (name) =>
+    categoriasDesp.filter(c => c.name.toLowerCase() === name.toLowerCase()).map(c => c.id);
+
+  const getSpent = (catName, period) => {
+    const catIds = getCatIds(catName);
     return transactions
       .filter(t => {
         if (t.type !== 'despesa') return false;
-        if (t.category !== cat && !t.description?.toLowerCase().includes(cat.toLowerCase())) return false;
-        const d = new Date(t.date);
+        // Transpação armazena category como ID (ex: 'mor'); compara diretamente com os IDs do orçamento
+        if (!catIds.includes(t.category)) return false;
+        const d = new Date(t.date + (t.date.includes('T') ? '' : 'T00:00:00'));
         if (period === 'monthly') return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
         return d.getFullYear() === now.getFullYear();
       })
-      .reduce((s, t) => s + parseFloat(t.value), 0);
+      .reduce((s, t) => s + parseFloat(t.value || 0), 0);
   };
 
   const handleSubmit = (e) => {
@@ -2232,7 +2246,7 @@ function Orcamentos({ budgets, transactions, onAdd, onDelete }) {
                 <label>Categoria</label>
                 <select value={form.category} onChange={e => setForm({ ...form, category: e.target.value })} required>
                   <option value="">Selecione...</option>
-                  {categorias.map(c => <option key={c} value={c}>{c}</option>)}
+                  {categoriasDesp.map(c => <option key={c.id} value={c.name}>{c.icon ? `${c.icon} ${c.name}` : c.name}</option>)}
                 </select>
               </div>
               <div className="form-group">
@@ -2261,11 +2275,12 @@ function Orcamentos({ budgets, transactions, onAdd, onDelete }) {
             const limit = parseFloat(b.limit_value);
             const pct = Math.min((spent / limit) * 100, 100);
             const overBudget = spent > limit;
+            const catMeta = categoriasDesp.find(c => c.name.toLowerCase() === b.category.toLowerCase());
             return (
               <div key={b.id} className={`budget-card ${overBudget ? 'over-budget' : ''}`}>
                 <div className="budget-header">
                   <div>
-                    <h4>{b.category}</h4>
+                    <h4>{catMeta?.icon ? `${catMeta.icon} ` : ''}{b.category}</h4>
                     <span className="period-badge">{periodos.find(p => p.value === b.period)?.label}</span>
                   </div>
                   <button className="delete-btn" onClick={() => onDelete(b.id)}>🗑️</button>
@@ -2273,12 +2288,14 @@ function Orcamentos({ budgets, transactions, onAdd, onDelete }) {
                 <div className="budget-amounts">
                   <span className={`spent ${overBudget ? 'text-danger' : ''}`}>Gasto: R$ {spent.toFixed(2)}</span>
                   <span className="limit">Limite: R$ {limit.toFixed(2)}</span>
-                  <span className="remaining">Restante: R$ {Math.max(limit - spent, 0).toFixed(2)}</span>
+                  <span className={`remaining ${overBudget ? 'text-danger' : 'text-success'}`}>
+                    {overBudget ? `Excedido: R$ ${(spent - limit).toFixed(2)}` : `Restante: R$ ${(limit - spent).toFixed(2)}`}
+                  </span>
                 </div>
                 <div className="budget-bar-wrap">
                   <div className="budget-bar" style={{ width: `${pct}%`, background: overBudget ? '#e74c3c' : pct > 80 ? '#f39c12' : '#2ecc71' }} />
                 </div>
-                <small>{pct.toFixed(0)}% utilizado</small>
+                <small style={{ color: overBudget ? '#e74c3c' : '#64748b' }}>{pct.toFixed(0)}% utilizado</small>
               </div>
             );
           })
