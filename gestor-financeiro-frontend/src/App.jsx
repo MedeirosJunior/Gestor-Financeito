@@ -277,6 +277,36 @@ const CategoryManager = {
   }
 };
 
+// Avança uma data de vencimento pelo período de recorrência
+const calcNextDue = (currentDueStr, frequency) => {
+  const [y, m, d] = currentDueStr.split('-').map(Number);
+  const date = new Date(y, m - 1, d);
+  switch (frequency) {
+    case 'monthly': date.setMonth(date.getMonth() + 1); break;
+    case 'bimonthly': date.setMonth(date.getMonth() + 2); break;
+    case 'quarterly': date.setMonth(date.getMonth() + 3); break;
+    case 'semiannual': date.setMonth(date.getMonth() + 6); break;
+    case 'annual': date.setFullYear(date.getFullYear() + 1); break;
+    case 'fifth-business-day': {
+      const nm = new Date(y, m, 1); // primeiro dia do próximo mês
+      let count = 0, td = 1;
+      while (count < 5) {
+        const t = new Date(nm.getFullYear(), nm.getMonth(), td);
+        if (t.getDay() !== 0 && t.getDay() !== 6) count++;
+        if (count < 5) td++;
+      }
+      return `${nm.getFullYear()}-${String(nm.getMonth() + 1).padStart(2, '0')}-${String(td).padStart(2, '0')}`;
+    }
+    default: date.setMonth(date.getMonth() + 1);
+  }
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+};
+
+const RECURRING_CAT_MAP = {
+  'Alimentação': 'alim', 'Transporte': 'trans', 'Moradia': 'mor',
+  'Saúde': 'sau', 'Lazer': 'laz', 'Outros': 'out-desp'
+};
+
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
@@ -289,6 +319,9 @@ function App() {
   const [loadingAuth, setLoadingAuth] = useState(false);
   const [recurringExpenses, setRecurringExpenses] = useState([]);
   const [dueAlerts, setDueAlerts] = useState([]);
+  const [budgets, setBudgets] = useState([]);
+  const [wallets, setWallets] = useState([]);
+  const [goals, setGoals] = useState([]);
   // Estado para modo escuro
   const [darkMode, setDarkMode] = useState(false);
 
@@ -758,7 +791,12 @@ function App() {
 
     setLoadingRecurring(true);
     try {
-      const nextDueDate = calculateNextDue(expense.startDate, expense.recurrence);
+      // Avança a partir da data de início até o próximo vencimento futuro
+      let nextDueDate = expense.startDate;
+      const today = new Date().toISOString().split('T')[0];
+      while (nextDueDate <= today) {
+        nextDueDate = calcNextDue(nextDueDate, expense.recurrence);
+      }
       const response = await fetch(`${config.API_URL}/recurring-expenses`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -804,262 +842,476 @@ function App() {
     }
   };
 
-  const calculateNextDue = (startDate, recurrence) => {
-    const start = new Date(startDate);
-    const today = new Date();
-    let nextDue = new Date(start);
+  const payRecurringExpense = useCallback(async (expense) => {
+    if (!currentUser?.email) return;
+    setLoadingRecurring(true);
+    try {
+      const dueDate = expense.next_due_date || expense.nextDue;
+      const freq = expense.frequency || expense.recurrence;
+      const catId = RECURRING_CAT_MAP[expense.category] || 'out-desp';
 
-    while (nextDue <= today) {
-      switch (recurrence) {
-        case 'monthly':
-          nextDue.setMonth(nextDue.getMonth() + 1);
-          break;
-        case 'bimonthly':
-          nextDue.setMonth(nextDue.getMonth() + 2);
-          break;
-        case 'quarterly':
-          nextDue.setMonth(nextDue.getMonth() + 3);
-          break;
-        case 'semiannual':
-          nextDue.setMonth(nextDue.getMonth() + 6);
-          break;
-        case 'annual':
-          nextDue.setFullYear(nextDue.getFullYear() + 1);
-          break;
-        case 'fifth-business-day':
-          nextDue = calculateFifthBusinessDay(nextDue);
-          break;
-        default:
-          nextDue.setMonth(nextDue.getMonth() + 1);
+      // 1. Criar transação de despesa
+      const txRes = await fetch(`${config.API_URL}/transactions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'despesa',
+          description: expense.description,
+          category: catId,
+          value: parseFloat(expense.value),
+          date: dueDate,
+          userId: currentUser.email
+        })
+      });
+      if (!txRes.ok) {
+        toast.error('Erro ao registrar transação');
+        return;
       }
+
+      // 2. Avançar próximo vencimento
+      const newDue = calcNextDue(dueDate, freq);
+      await fetch(`${config.API_URL}/recurring-expenses/${expense.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          description: expense.description,
+          category: expense.category,
+          value: parseFloat(expense.value),
+          frequency: freq,
+          next_due_date: newDue,
+          is_active: 1
+        })
+      });
+
+      await fetchTransactions();
+      await fetchRecurringExpenses();
+      toast.success(`✅ Pagamento registrado! Próximo vencimento: ${new Date(newDue + 'T00:00:00').toLocaleDateString('pt-BR')}`);
+    } catch (error) {
+      toast.error('Erro ao registrar pagamento');
+    } finally {
+      setLoadingRecurring(false);
     }
-    return nextDue.toISOString().split('T')[0];
-  };
+  }, [currentUser, fetchTransactions, fetchRecurringExpenses]);
 
-  const calculateFifthBusinessDay = (date) => {
-    const year = date.getFullYear();
-    const month = date.getMonth();
-    let businessDays = 0;
-    let day = 1;
-
-    while (businessDays < 5) {
-      const currentDate = new Date(year, month, day);
-      const dayOfWeek = currentDate.getDay();
-
-      if (dayOfWeek !== 0 && dayOfWeek !== 6) {
-        businessDays++;
+  const updateRecurringExpense = useCallback(async (id, data) => {
+    setLoadingRecurring(true);
+    try {
+      const res = await fetch(`${config.API_URL}/recurring-expenses/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+      if (res.ok) {
+        await fetchRecurringExpenses();
+        toast.success('Despesa recorrente atualizada!');
+        return true;
       }
-
-      if (businessDays < 5) {
-        day++;
-      }
+      toast.error('Erro ao atualizar despesa recorrente');
+      return false;
+    } catch (error) {
+      toast.error('Erro de conexão');
+      return false;
+    } finally {
+      setLoadingRecurring(false);
     }
+  }, [fetchRecurringExpenses]);
 
-    let nextMonth = new Date(year, month + 1, day);
-    return nextMonth;
-  };
+  // ============ ORÇAMENTOS ============
+  const fetchBudgets = useCallback(async () => {
+    if (!currentUser?.email) return;
+    try {
+      const res = await fetch(`${config.API_URL}/budgets?userId=${encodeURIComponent(currentUser.email)}`);
+      if (res.ok) setBudgets(await res.json());
+    } catch (e) { console.error('Erro ao buscar orçamentos', e); }
+  }, [currentUser]);
 
-  const checkDueExpenses = (expenses) => {
-    const today = new Date();
-    const alerts = [];
+  useEffect(() => { if (isAuthenticated) fetchBudgets(); }, [isAuthenticated, fetchBudgets]);
 
-    expenses.forEach(expense => {
-      const dueDate = new Date(expense.nextDue);
-      const diffTime = dueDate - today;
-      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-      if (diffDays <= 7 && diffDays >= 0) {
-        alerts.push({
-          ...expense,
-          daysUntilDue: diffDays
-        });
-      } else if (diffDays < 0) {
-        alerts.push({
-          ...expense,
-          daysUntilDue: diffDays,
-          overdue: true
-        });
-      }
+  const addBudget = useCallback(async (data) => {
+    const res = await fetch(`${config.API_URL}/budgets`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...data, userId: currentUser.email })
     });
+    if (res.ok) { await fetchBudgets(); toast.success('Orçamento criado!'); return true; }
+    const d = await res.json(); toast.error(d.error || 'Erro ao criar orçamento'); return false;
+  }, [currentUser, fetchBudgets]);
 
-    setDueAlerts(alerts);
-  };
+  const deleteBudget = useCallback(async (id) => {
+    const res = await fetch(`${config.API_URL}/budgets/${id}`, { method: 'DELETE' });
+    if (res.ok) { await fetchBudgets(); toast.success('Orçamento removido!'); }
+  }, [fetchBudgets]);
 
-  const isAdmin = currentUser?.email === 'junior395@gmail.com';
+  // ============ CONTAS ============
+  const fetchWallets = useCallback(async () => {
+    if (!currentUser?.email) return;
+    try {
+      const res = await fetch(`${config.API_URL}/wallets?userId=${encodeURIComponent(currentUser.email)}`);
+      if (res.ok) setWallets(await res.json());
+    } catch (e) { console.error('Erro ao buscar contas', e); }
+  }, [currentUser]);
 
-  // Se não estiver autenticado, mostrar tela de login
-  if (!isAuthenticated) {
-    return (
-      <Login
-        onLogin={handleLogin}
-        loadingAuth={loadingAuth}
-        setLoadingAuth={setLoadingAuth}
-      />
-    );
+  useEffect(() => { if (isAuthenticated) fetchWallets(); }, [isAuthenticated, fetchWallets]);
+
+  const addWallet = useCallback(async (data) => {
+    const res = await fetch(`${config.API_URL}/wallets`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...data, userId: currentUser.email })
+    });
+    if (res.ok) { await fetchWallets(); toast.success('Conta criada!'); return true; }
+    const d = await res.json(); toast.error(d.error || 'Erro ao criar conta'); return false;
+  }, [currentUser, fetchWallets]);
+
+  const updateWallet = useCallback(async (id, data) => {
+    const res = await fetch(`${config.API_URL}/wallets/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+    if (res.ok) { await fetchWallets(); toast.success('Conta atualizada!'); return true; }
+    return false;
+  }, [fetchWallets]);
+
+  const deleteWallet = useCallback(async (id) => {
+    const res = await fetch(`${config.API_URL}/wallets/${id}`, { method: 'DELETE' });
+    if (res.ok) { await fetchWallets(); toast.success('Conta removida!'); }
+  }, [fetchWallets]);
+
+  // ============ METAS ============
+  const fetchGoals = useCallback(async () => {
+    if (!currentUser?.email) return;
+    try {
+      const res = await fetch(`${config.API_URL}/goals?userId=${encodeURIComponent(currentUser.email)}`);
+      if (res.ok) setGoals(await res.json());
+    } catch (e) { console.error('Erro ao buscar metas', e); }
+  }, [currentUser]);
+
+  useEffect(() => { if (isAuthenticated) fetchGoals(); }, [isAuthenticated, fetchGoals]);
+
+  const addGoal = useCallback(async (data) => {
+    const res = await fetch(`${config.API_URL}/goals`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...data, userId: currentUser.email })
+    });
+    if (res.ok) { await fetchGoals(); toast.success('Meta criada!'); return true; }
+    const d = await res.json(); toast.error(d.error || 'Erro ao criar meta'); return false;
+  }, [currentUser, fetchGoals]);
+
+  const updateGoal = useCallback(async (id, data) => {
+    const res = await fetch(`${config.API_URL}/goals/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+    if (res.ok) { await fetchGoals(); toast.success('Meta atualizada!'); return true; }
+    return false;
+  }, [fetchGoals]);
+
+  const deleteGoal = useCallback(async (id) => {
+    const res = await fetch(`${config.API_URL}/goals/${id}`, { method: 'DELETE' });
+    if (res.ok) { await fetchGoals(); toast.success('Meta removida!'); }
+  }, [fetchGoals]);
+  const start = new Date(startDate);
+  const today = new Date();
+  let nextDue = new Date(start);
+
+  while (nextDue <= today) {
+    switch (recurrence) {
+      case 'monthly':
+        nextDue.setMonth(nextDue.getMonth() + 1);
+        break;
+      case 'bimonthly':
+        nextDue.setMonth(nextDue.getMonth() + 2);
+        break;
+      case 'quarterly':
+        nextDue.setMonth(nextDue.getMonth() + 3);
+        break;
+      case 'semiannual':
+        nextDue.setMonth(nextDue.getMonth() + 6);
+        break;
+      case 'annual':
+        nextDue.setFullYear(nextDue.getFullYear() + 1);
+        break;
+      case 'fifth-business-day':
+        nextDue = calculateFifthBusinessDay(nextDue);
+        break;
+      default:
+        nextDue.setMonth(nextDue.getMonth() + 1);
+    }
+  }
+  return nextDue.toISOString().split('T')[0];
+};
+
+const calculateFifthBusinessDay = (date) => {
+  const year = date.getFullYear();
+  const month = date.getMonth();
+  let businessDays = 0;
+  let day = 1;
+
+  while (businessDays < 5) {
+    const currentDate = new Date(year, month, day);
+    const dayOfWeek = currentDate.getDay();
+
+    if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+      businessDays++;
+    }
+
+    if (businessDays < 5) {
+      day++;
+    }
   }
 
+  let nextMonth = new Date(year, month + 1, day);
+  return nextMonth;
+};
+
+const checkDueExpenses = (expenses) => {
+  const today = new Date();
+  const alerts = [];
+
+  expenses.forEach(expense => {
+    const dueDate = new Date(expense.nextDue);
+    const diffTime = dueDate - today;
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    if (diffDays <= 7 && diffDays >= 0) {
+      alerts.push({
+        ...expense,
+        daysUntilDue: diffDays
+      });
+    } else if (diffDays < 0) {
+      alerts.push({
+        ...expense,
+        daysUntilDue: diffDays,
+        overdue: true
+      });
+    }
+  });
+
+  setDueAlerts(alerts);
+};
+
+const isAdmin = currentUser?.email === 'junior395@gmail.com';
+
+// Se não estiver autenticado, mostrar tela de login
+if (!isAuthenticated) {
   return (
-    <div className={`app${darkMode ? ' dark-mode' : ''}`}>
-      <LoadingOverlay
-        show={loadingTransactions}
-        message="Processando transação..."
-      />
-      <LoadingOverlay
-        show={loadingRecurring}
-        message="Processando despesa recorrente..."
-      />
-      <header className="header">
-        <div className="header-top">
-          <h1>💰 Gestor Financeiro</h1>
-          <div className="header-controls">
-            <div className="connectivity-status">
-              {apiChecked && (
-                <span className={`status-indicator ${isApiAvailable ? 'online' : 'offline'}`}>
-                  {isApiAvailable ? '🟢 Online' : '🔴 Offline'}
-                </span>
-              )}
-            </div>
-            <div className="user-info">
-              <span>👤 {currentUser?.name || currentUser?.username}</span>
-              {isAdmin && (
-                <button
-                  className={activeTab === 'usuarios' ? 'active' : ''}
-                  onClick={() => setActiveTab('usuarios')}
-                  title="Gerenciar Usuários"
-                >
-                  👥 Usuários
-                </button>
-              )}
+    <Login
+      onLogin={handleLogin}
+      loadingAuth={loadingAuth}
+      setLoadingAuth={setLoadingAuth}
+    />
+  );
+}
+
+return (
+  <div className={`app${darkMode ? ' dark-mode' : ''}`}>
+    <LoadingOverlay
+      show={loadingTransactions}
+      message="Processando transação..."
+    />
+    <LoadingOverlay
+      show={loadingRecurring}
+      message="Processando despesa recorrente..."
+    />
+    <header className="header">
+      <div className="header-top">
+        <h1>💰 Gestor Financeiro</h1>
+        <div className="header-controls">
+          <div className="connectivity-status">
+            {apiChecked && (
+              <span className={`status-indicator ${isApiAvailable ? 'online' : 'offline'}`}>
+                {isApiAvailable ? '🟢 Online' : '🔴 Offline'}
+              </span>
+            )}
+          </div>
+          <div className="user-info">
+            <span>👤 {currentUser?.name || currentUser?.username}</span>
+            {isAdmin && (
               <button
-                className="logout-btn"
-                onClick={handleLogout}
-                title="Sair"
+                className={activeTab === 'usuarios' ? 'active' : ''}
+                onClick={() => setActiveTab('usuarios')}
+                title="Gerenciar Usuários"
               >
-                🚪 Sair
+                👥 Usuários
               </button>
-              <button
-                className="darkmode-btn"
-                onClick={() => setDarkMode(dm => !dm)}
-                title={darkMode ? 'Modo Claro' : 'Modo Escuro'}
-                style={{ marginLeft: '10px' }}
-              >
-                {darkMode ? '🌙' : '☀️'}
-              </button>
-            </div>
+            )}
+            <button
+              className="logout-btn"
+              onClick={handleLogout}
+              title="Sair"
+            >
+              🚪 Sair
+            </button>
+            <button
+              className="darkmode-btn"
+              onClick={() => setDarkMode(dm => !dm)}
+              title={darkMode ? 'Modo Claro' : 'Modo Escuro'}
+              style={{ marginLeft: '10px' }}
+            >
+              {darkMode ? '🌙' : '☀️'}
+            </button>
           </div>
         </div>
-        <nav className="nav">
-          <button
-            className={activeTab === 'dashboard' ? 'active' : ''}
-            onClick={() => setActiveTab('dashboard')}
-          >
-            📊 Dashboard
-          </button>
-          <button
-            className={activeTab === 'entradas' ? 'active' : ''}
-            onClick={() => setActiveTab('entradas')}
-          >
-            💵 Entradas
-          </button>
-          <button
-            className={activeTab === 'despesas' ? 'active' : ''}
-            onClick={() => setActiveTab('despesas')}
-          >
-            💸 Despesas
-          </button>
-          <button
-            className={activeTab === 'relatorios' ? 'active' : ''}
-            onClick={() => setActiveTab('relatorios')}
-          >
-            📈 Relatórios
-          </button>
-          <button
-            className={activeTab === 'historico' ? 'active' : ''}
-            onClick={() => setActiveTab('historico')}
-          >
-            📋 Histórico
-          </button>
-          <button
-            className={activeTab === 'recorrentes' ? 'active' : ''}
-            onClick={() => setActiveTab('recorrentes')}
-          >
-            🔄 Recorrentes
-          </button>
-          <button
-            className={activeTab === 'categorias' ? 'active' : ''}
-            onClick={() => setActiveTab('categorias')}
-          >
-            🏷️ Categorias
-          </button>
-        </nav>
-      </header>
-      <main className="main">
-        {loading && <div className="loading">Carregando...</div>}
-        <Suspense fallback={<SuspenseLoader message="Carregando aba..." />}>
-          {activeTab === 'dashboard' && (
-            <Dashboard
-              transactions={transactions}
-              dueAlerts={dueAlerts}
-            />
-          )}
-          {activeTab === 'entradas' && (
-            <LancamentoForm
-              type="entrada"
-              onAdd={addTransaction}
-              title="💵 Lançar Entrada"
-              categories={categories}
-              isApiAvailable={isApiAvailable}
-            />
-          )}
-          {activeTab === 'despesas' && (
-            <LancamentoForm
-              type="despesa"
-              onAdd={addTransaction}
-              title="💸 Lançar Despesa"
-              categories={categories}
-              isApiAvailable={isApiAvailable}
-            />
-          )}
-          {activeTab === 'relatorios' && (
-            <Relatorios
-              transactions={transactions}
-              loadingExport={loadingExport}
-              setLoadingExport={setLoadingExport}
-            />
-          )}
-          {activeTab === 'historico' && (
-            <Historico
-              transactions={transactions}
-              onDelete={deleteTransaction}
-              onUpdate={updateTransaction}
-              isApiAvailable={isApiAvailable}
-              categories={categories}
-            />
-          )}
-          {activeTab === 'recorrentes' && (
-            <DespesasRecorrentes
-              expenses={recurringExpenses}
-              onAdd={addRecurringExpense}
-              onDelete={deleteRecurringExpense}
-            />
-          )}
-          {activeTab === 'categorias' && (
-            <CategoryManagement
-              categories={categories}
-              onAddCategory={addCustomCategory}
-              onUpdateCategory={updateCustomCategory}
-              onDeleteCategory={deleteCustomCategory}
-            />
-          )}
-          {activeTab === 'usuarios' && isAdmin && (
-            <GerenciarUsuarios />
-          )}
-        </Suspense>
-      </main>
+      </div>
+      <nav className="nav">
+        <button
+          className={activeTab === 'dashboard' ? 'active' : ''}
+          onClick={() => setActiveTab('dashboard')}
+        >
+          📊 Dashboard
+        </button>
+        <button
+          className={activeTab === 'entradas' ? 'active' : ''}
+          onClick={() => setActiveTab('entradas')}
+        >
+          💵 Entradas
+        </button>
+        <button
+          className={activeTab === 'despesas' ? 'active' : ''}
+          onClick={() => setActiveTab('despesas')}
+        >
+          💸 Despesas
+        </button>
+        <button
+          className={activeTab === 'relatorios' ? 'active' : ''}
+          onClick={() => setActiveTab('relatorios')}
+        >
+          📈 Relatórios
+        </button>
+        <button
+          className={activeTab === 'historico' ? 'active' : ''}
+          onClick={() => setActiveTab('historico')}
+        >
+          📋 Histórico
+        </button>
+        <button
+          className={activeTab === 'recorrentes' ? 'active' : ''}
+          onClick={() => setActiveTab('recorrentes')}
+        >
+          🔄 Recorrentes
+        </button>
+        <button
+          className={activeTab === 'categorias' ? 'active' : ''}
+          onClick={() => setActiveTab('categorias')}
+        >
+          🏷️ Categorias
+        </button>
+        <button
+          className={activeTab === 'orcamentos' ? 'active' : ''}
+          onClick={() => setActiveTab('orcamentos')}
+        >
+          🎯 Orçamentos
+        </button>
+        <button
+          className={activeTab === 'contas' ? 'active' : ''}
+          onClick={() => setActiveTab('contas')}
+        >
+          🏦 Contas
+        </button>
+        <button
+          className={activeTab === 'metas' ? 'active' : ''}
+          onClick={() => setActiveTab('metas')}
+        >
+          🏆 Metas
+        </button>
+      </nav>
+    </header>
+    <main className="main">
+      {loading && <div className="loading">Carregando...</div>}
+      <Suspense fallback={<SuspenseLoader message="Carregando aba..." />}>
+        {activeTab === 'dashboard' && (
+          <Dashboard
+            transactions={transactions}
+            dueAlerts={dueAlerts}
+          />
+        )}
+        {activeTab === 'entradas' && (
+          <LancamentoForm
+            type="entrada"
+            onAdd={addTransaction}
+            title="💵 Lançar Entrada"
+            categories={categories}
+            isApiAvailable={isApiAvailable}
+          />
+        )}
+        {activeTab === 'despesas' && (
+          <LancamentoForm
+            type="despesa"
+            onAdd={addTransaction}
+            title="💸 Lançar Despesa"
+            categories={categories}
+            isApiAvailable={isApiAvailable}
+          />
+        )}
+        {activeTab === 'relatorios' && (
+          <Relatorios
+            transactions={transactions}
+            loadingExport={loadingExport}
+            setLoadingExport={setLoadingExport}
+          />
+        )}
+        {activeTab === 'historico' && (
+          <Historico
+            transactions={transactions}
+            onDelete={deleteTransaction}
+            onUpdate={updateTransaction}
+            isApiAvailable={isApiAvailable}
+            categories={categories}
+          />
+        )}
+        {activeTab === 'recorrentes' && (
+          <DespesasRecorrentes
+            expenses={recurringExpenses}
+            onAdd={addRecurringExpense}
+            onDelete={deleteRecurringExpense}
+            onPay={payRecurringExpense}
+            onUpdate={updateRecurringExpense}
+          />
+        )}
+        {activeTab === 'orcamentos' && (
+          <Orcamentos
+            budgets={budgets}
+            transactions={transactions}
+            onAdd={addBudget}
+            onDelete={deleteBudget}
+          />
+        )}
+        {activeTab === 'contas' && (
+          <Contas
+            wallets={wallets}
+            onAdd={addWallet}
+            onUpdate={updateWallet}
+            onDelete={deleteWallet}
+          />
+        )}
+        {activeTab === 'metas' && (
+          <Metas
+            goals={goals}
+            onAdd={addGoal}
+            onUpdate={updateGoal}
+            onDelete={deleteGoal}
+          />
+        )}
+        {activeTab === 'categorias' && (
+          <CategoryManagement
+            categories={categories}
+            onAddCategory={addCustomCategory}
+            onUpdateCategory={updateCustomCategory}
+            onDeleteCategory={deleteCustomCategory}
+          />
+        )}
+        {activeTab === 'usuarios' && isAdmin && (
+          <GerenciarUsuarios />
+        )}
+      </Suspense>
+    </main>
 
-      <ToastContainer />
-    </div>
-  );
+    <ToastContainer />
+  </div>
+);
 }
 
 // Componentes de Loading
@@ -1807,14 +2059,14 @@ const Dashboard = React.memo(({ transactions, dueAlerts }) => {
 });
 
 // Componente de Despesas Recorrentes
-function DespesasRecorrentes({ expenses, onAdd, onDelete }) {
+function DespesasRecorrentes({ expenses, onAdd, onDelete, onPay, onUpdate }) {
   const [form, setForm] = useState({
-    description: '',
-    value: '',
-    category: '',
-    recurrence: 'monthly',
-    startDate: new Date().toISOString().slice(0, 10)
+    description: '', value: '', category: '',
+    recurrence: 'monthly', startDate: new Date().toISOString().slice(0, 10)
   });
+  const [editingId, setEditingId] = useState(null);
+  const [editForm, setEditForm] = useState({});
+  const [showAddForm, setShowAddForm] = useState(false);
 
   const recurrenceOptions = [
     { value: 'monthly', label: 'Mensal' },
@@ -1824,120 +2076,500 @@ function DespesasRecorrentes({ expenses, onAdd, onDelete }) {
     { value: 'annual', label: 'Anual' },
     { value: 'fifth-business-day', label: 'Quinto Dia Útil' }
   ];
-
   const categorias = ['Alimentação', 'Transporte', 'Moradia', 'Saúde', 'Lazer', 'Outros'];
+  const formatRec = (r) => recurrenceOptions.find(o => o.value === r)?.label || r;
+
+  const getDueStatus = (nextDue) => {
+    if (!nextDue) return { label: '—', cls: '' };
+    const today = new Date();
+    const due = new Date(nextDue + 'T00:00:00');
+    const diff = Math.ceil((due - today) / 86400000);
+    if (diff < 0) return { label: `Vencida há ${Math.abs(diff)}d`, cls: 'overdue' };
+    if (diff === 0) return { label: 'Vence hoje!', cls: 'overdue' };
+    if (diff <= 7) return { label: `Vence em ${diff}d`, cls: 'due-soon' };
+    return { label: `${due.toLocaleDateString('pt-BR')}`, cls: 'ok' };
+  };
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (form.description && form.value && form.category) {
-      if (parseFloat(form.value) <= 0) {
-        toast.error('O valor deve ser maior que zero!');
-        return;
-      }
-      onAdd({
-        ...form,
-        value: parseFloat(form.value),
-        id: Date.now(),
-        created: new Date().toISOString()
-      });
-      setForm({
-        description: '',
-        value: '',
-        category: '',
-        recurrence: 'monthly',
-        startDate: new Date().toISOString().slice(0, 10)
-      });
-    } else {
-      toast.error('Preencha todos os campos obrigatórios!');
-    }
+    if (!form.description || !form.value || !form.category) { toast.error('Preencha todos os campos!'); return; }
+    if (parseFloat(form.value) <= 0) { toast.error('Valor deve ser maior que zero!'); return; }
+    onAdd({ ...form, value: parseFloat(form.value) });
+    setForm({ description: '', value: '', category: '', recurrence: 'monthly', startDate: new Date().toISOString().slice(0, 10) });
+    setShowAddForm(false);
   };
 
-  const formatRecurrence = (recurrence) => {
-    const option = recurrenceOptions.find(opt => opt.value === recurrence);
-    return option ? option.label : recurrence;
+  const startEdit = (exp) => {
+    setEditingId(exp.id);
+    setEditForm({
+      description: exp.description,
+      category: exp.category,
+      value: exp.value,
+      frequency: exp.frequency || exp.recurrence,
+      next_due_date: exp.next_due_date || exp.nextDue,
+      is_active: 1
+    });
+  };
+
+  const handleUpdate = async (e) => {
+    e.preventDefault();
+    const ok = await onUpdate(editingId, editForm);
+    if (ok) setEditingId(null);
   };
 
   return (
     <div className="recurring-expenses">
-      <h2>🔄 Despesas Recorrentes</h2>
+      <div className="section-header">
+        <h2>🔄 Despesas Recorrentes</h2>
+        <button className="add-user-btn" onClick={() => setShowAddForm(v => !v)}>
+          {showAddForm ? '❌ Cancelar' : '➕ Nova Recorrente'}
+        </button>
+      </div>
 
-      <form onSubmit={handleSubmit} className="recurring-form">
-        <div className="form-grid">
-          <input
-            type="text"
-            placeholder="Descrição"
-            value={form.description}
-            onChange={(e) => setForm({ ...form, description: e.target.value })}
-            required
-          />
-
-          <input
-            type="number"
-            step="0.01"
-            placeholder="Valor"
-            value={form.value}
-            onChange={(e) => setForm({ ...form, value: e.target.value })}
-            required
-          />
-
-          <select
-            value={form.category}
-            onChange={(e) => setForm({ ...form, category: e.target.value })}
-            required
-          >
-            <option value="">Categoria</option>
-            {categorias.map(cat => (
-              <option key={cat} value={cat}>{cat}</option>
-            ))}
-          </select>
-
-          <select
-            value={form.recurrence}
-            onChange={(e) => setForm({ ...form, recurrence: e.target.value })}
-            required
-          >
-            {recurrenceOptions.map(option => (
-              <option key={option.value} value={option.value}>{option.label}</option>
-            ))}
-          </select>
-
-          <input
-            type="date"
-            value={form.startDate}
-            onChange={(e) => setForm({ ...form, startDate: e.target.value })}
-            required
-          />
-
-          <button type="submit">Adicionar Recorrente</button>
+      {showAddForm && (
+        <div className="add-user-form">
+          <h3>Nova Despesa Recorrente</h3>
+          <form onSubmit={handleSubmit}>
+            <div className="form-grid-2">
+              <div className="form-group">
+                <label>Descrição</label>
+                <input type="text" placeholder="Ex: Aluguel, Internet..." value={form.description}
+                  onChange={e => setForm({ ...form, description: e.target.value })} required />
+              </div>
+              <div className="form-group">
+                <label>Valor (R$)</label>
+                <input type="number" step="0.01" placeholder="0,00" value={form.value}
+                  onChange={e => setForm({ ...form, value: e.target.value })} required />
+              </div>
+              <div className="form-group">
+                <label>Categoria</label>
+                <select value={form.category} onChange={e => setForm({ ...form, category: e.target.value })} required>
+                  <option value="">Selecione...</option>
+                  {categorias.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
+              <div className="form-group">
+                <label>Recorrência</label>
+                <select value={form.recurrence} onChange={e => setForm({ ...form, recurrence: e.target.value })}>
+                  {recurrenceOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
+              </div>
+              <div className="form-group">
+                <label>Data de início</label>
+                <input type="date" value={form.startDate}
+                  onChange={e => setForm({ ...form, startDate: e.target.value })} required />
+              </div>
+            </div>
+            <button type="submit" className="submit-btn">✅ Adicionar</button>
+          </form>
         </div>
-      </form>
+      )}
 
       <div className="recurring-list">
-        <h3>Despesas Cadastradas</h3>
         {expenses.length === 0 ? (
           <p className="empty-message">Nenhuma despesa recorrente cadastrada</p>
         ) : (
-          expenses.map(expense => (
-            <div key={expense.id} className="recurring-item">
-              <div className="recurring-info">
-                <h4>{expense.description}</h4>
-                <p className="recurring-details">
-                  <span className="category">{expense.category}</span>
-                  <span className="recurrence">{formatRecurrence(expense.recurrence)}</span>
-                </p>
+          expenses.map(exp => {
+            const dueKey = exp.next_due_date || exp.nextDue;
+            const status = getDueStatus(dueKey);
+            return (
+              <div key={exp.id} className={`recurring-item ${status.cls}`}>
+                {editingId === exp.id ? (
+                  <form onSubmit={handleUpdate} className="edit-recurring-form">
+                    <div className="form-grid-2">
+                      <div className="form-group">
+                        <label>Descrição</label>
+                        <input type="text" value={editForm.description}
+                          onChange={e => setEditForm({ ...editForm, description: e.target.value })} required />
+                      </div>
+                      <div className="form-group">
+                        <label>Valor (R$)</label>
+                        <input type="number" step="0.01" value={editForm.value}
+                          onChange={e => setEditForm({ ...editForm, value: e.target.value })} required />
+                      </div>
+                      <div className="form-group">
+                        <label>Categoria</label>
+                        <select value={editForm.category} onChange={e => setEditForm({ ...editForm, category: e.target.value })}>
+                          {categorias.map(c => <option key={c} value={c}>{c}</option>)}
+                        </select>
+                      </div>
+                      <div className="form-group">
+                        <label>Recorrência</label>
+                        <select value={editForm.frequency} onChange={e => setEditForm({ ...editForm, frequency: e.target.value })}>
+                          {recurrenceOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                        </select>
+                      </div>
+                      <div className="form-group">
+                        <label>Próximo Vencimento</label>
+                        <input type="date" value={editForm.next_due_date}
+                          onChange={e => setEditForm({ ...editForm, next_due_date: e.target.value })} required />
+                      </div>
+                    </div>
+                    <div className="edit-form-actions">
+                      <button type="submit" className="submit-btn">💾 Salvar</button>
+                      <button type="button" className="cancel-btn" onClick={() => setEditingId(null)}>❌ Cancelar</button>
+                    </div>
+                  </form>
+                ) : (
+                  <>
+                    <div className="recurring-info">
+                      <h4>{exp.description}</h4>
+                      <p className="recurring-details">
+                        <span className="category-badge">{exp.category}</span>
+                        <span className="rec-badge">{formatRec(exp.frequency || exp.recurrence)}</span>
+                      </p>
+                      <span className={`due-badge ${status.cls}`}>{status.label}</span>
+                    </div>
+                    <div className="recurring-actions">
+                      <span className="recurring-value">R$ {parseFloat(exp.value).toFixed(2)}</span>
+                      <button className="pay-btn" onClick={() => onPay(exp)} title="Marcar como pago">✅ Pago</button>
+                      <button className="edit-btn" onClick={() => startEdit(exp)} title="Editar">✏️</button>
+                      <button className="delete-btn" onClick={() => onDelete(exp.id)} title="Excluir">🗑️</button>
+                    </div>
+                  </>
+                )}
               </div>
-              <div className="recurring-actions">
-                <span className="recurring-value">R$ {parseFloat(expense.value).toFixed(2)}</span>
-                <button
-                  className="delete-btn"
-                  onClick={() => onDelete(expense.id)}
-                  title="Excluir"
-                >
-                  🗑️
-                </button>
+            );
+          })
+        )}
+      </div>
+    </div>
+  );
+}
+
+
+// Componente Orçamentos
+function Orcamentos({ budgets, transactions, onAdd, onDelete }) {
+  const [form, setForm] = useState({ category: '', limit_value: '', period: 'monthly' });
+  const [showForm, setShowForm] = useState(false);
+
+  const categorias = ['Alimentação', 'Transporte', 'Moradia', 'Saúde', 'Lazer', 'Outros'];
+  const periodos = [{ value: 'monthly', label: 'Mensal' }, { value: 'annual', label: 'Anual' }];
+
+  const now = new Date();
+  const getSpent = (cat, period) => {
+    return transactions
+      .filter(t => {
+        if (t.type !== 'despesa') return false;
+        if (t.category !== cat && !t.description?.toLowerCase().includes(cat.toLowerCase())) return false;
+        const d = new Date(t.date);
+        if (period === 'monthly') return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+        return d.getFullYear() === now.getFullYear();
+      })
+      .reduce((s, t) => s + parseFloat(t.value), 0);
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (!form.category || !form.limit_value) { toast.error('Preencha todos os campos!'); return; }
+    onAdd({ ...form, limit_value: parseFloat(form.limit_value) });
+    setForm({ category: '', limit_value: '', period: 'monthly' });
+    setShowForm(false);
+  };
+
+  return (
+    <div className="orcamentos-section">
+      <div className="section-header">
+        <h2>📊 Orçamentos</h2>
+        <button className="add-user-btn" onClick={() => setShowForm(v => !v)}>
+          {showForm ? '❌ Cancelar' : '➕ Novo Orçamento'}
+        </button>
+      </div>
+
+      {showForm && (
+        <div className="add-user-form">
+          <h3>Novo Orçamento</h3>
+          <form onSubmit={handleSubmit}>
+            <div className="form-grid-2">
+              <div className="form-group">
+                <label>Categoria</label>
+                <select value={form.category} onChange={e => setForm({ ...form, category: e.target.value })} required>
+                  <option value="">Selecione...</option>
+                  {categorias.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
+              <div className="form-group">
+                <label>Limite (R$)</label>
+                <input type="number" step="0.01" placeholder="0,00" value={form.limit_value}
+                  onChange={e => setForm({ ...form, limit_value: e.target.value })} required />
+              </div>
+              <div className="form-group">
+                <label>Período</label>
+                <select value={form.period} onChange={e => setForm({ ...form, period: e.target.value })}>
+                  {periodos.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
+                </select>
+              </div>
+            </div>
+            <button type="submit" className="submit-btn">✅ Adicionar</button>
+          </form>
+        </div>
+      )}
+
+      <div className="budget-list">
+        {budgets.length === 0 ? (
+          <p className="empty-message">Nenhum orçamento cadastrado</p>
+        ) : (
+          budgets.map(b => {
+            const spent = getSpent(b.category, b.period);
+            const limit = parseFloat(b.limit_value);
+            const pct = Math.min((spent / limit) * 100, 100);
+            const overBudget = spent > limit;
+            return (
+              <div key={b.id} className={`budget-card ${overBudget ? 'over-budget' : ''}`}>
+                <div className="budget-header">
+                  <div>
+                    <h4>{b.category}</h4>
+                    <span className="period-badge">{periodos.find(p => p.value === b.period)?.label}</span>
+                  </div>
+                  <button className="delete-btn" onClick={() => onDelete(b.id)}>🗑️</button>
+                </div>
+                <div className="budget-amounts">
+                  <span className={`spent ${overBudget ? 'text-danger' : ''}`}>Gasto: R$ {spent.toFixed(2)}</span>
+                  <span className="limit">Limite: R$ {limit.toFixed(2)}</span>
+                  <span className="remaining">Restante: R$ {Math.max(limit - spent, 0).toFixed(2)}</span>
+                </div>
+                <div className="budget-bar-wrap">
+                  <div className="budget-bar" style={{ width: `${pct}%`, background: overBudget ? '#e74c3c' : pct > 80 ? '#f39c12' : '#2ecc71' }} />
+                </div>
+                <small>{pct.toFixed(0)}% utilizado</small>
+              </div>
+            );
+          })
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Componente Contas (Carteiras)
+function Contas({ wallets, onAdd, onUpdate, onDelete }) {
+  const [form, setForm] = useState({ name: '', type: 'corrente', balance: '' });
+  const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+  const [editBalance, setEditBalance] = useState('');
+
+  const tipos = [
+    { value: 'corrente', label: '🏦 Conta Corrente' },
+    { value: 'poupanca', label: '💰 Poupança' },
+    { value: 'investimento', label: '📈 Investimento' },
+    { value: 'carteira', label: '👛 Carteira' }
+  ];
+
+  const totalBalance = wallets.reduce((s, w) => s + parseFloat(w.balance || 0), 0);
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (!form.name) { toast.error('Informe o nome da conta!'); return; }
+    onAdd({ ...form, balance: parseFloat(form.balance || 0) });
+    setForm({ name: '', type: 'corrente', balance: '' });
+    setShowForm(false);
+  };
+
+  const handleUpdateBalance = (e) => {
+    e.preventDefault();
+    onUpdate(editingId, { balance: parseFloat(editBalance) });
+    setEditingId(null);
+  };
+
+  return (
+    <div className="contas-section">
+      <div className="section-header">
+        <h2>🏦 Contas e Carteiras</h2>
+        <button className="add-user-btn" onClick={() => setShowForm(v => !v)}>
+          {showForm ? '❌ Cancelar' : '➕ Nova Conta'}
+        </button>
+      </div>
+
+      <div className="total-balance-card">
+        <span>Saldo Total</span>
+        <strong className={totalBalance >= 0 ? 'text-success' : 'text-danger'}>R$ {totalBalance.toFixed(2)}</strong>
+      </div>
+
+      {showForm && (
+        <div className="add-user-form">
+          <h3>Nova Conta</h3>
+          <form onSubmit={handleSubmit}>
+            <div className="form-grid-2">
+              <div className="form-group">
+                <label>Nome</label>
+                <input type="text" placeholder="Ex: Nubank, Caixa..." value={form.name}
+                  onChange={e => setForm({ ...form, name: e.target.value })} required />
+              </div>
+              <div className="form-group">
+                <label>Tipo</label>
+                <select value={form.type} onChange={e => setForm({ ...form, type: e.target.value })}>
+                  {tipos.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                </select>
+              </div>
+              <div className="form-group">
+                <label>Saldo Inicial (R$)</label>
+                <input type="number" step="0.01" placeholder="0,00" value={form.balance}
+                  onChange={e => setForm({ ...form, balance: e.target.value })} />
+              </div>
+            </div>
+            <button type="submit" className="submit-btn">✅ Adicionar</button>
+          </form>
+        </div>
+      )}
+
+      <div className="wallet-list">
+        {wallets.length === 0 ? (
+          <p className="empty-message">Nenhuma conta cadastrada</p>
+        ) : (
+          wallets.map(w => (
+            <div key={w.id} className="wallet-card">
+              <div className="wallet-info">
+                <span className="wallet-icon">{tipos.find(t => t.value === w.type)?.label?.split(' ')[0] || '💳'}</span>
+                <div>
+                  <h4>{w.name}</h4>
+                  <small>{tipos.find(t => t.value === w.type)?.label?.split(' ').slice(1).join(' ') || w.type}</small>
+                </div>
+              </div>
+              <div className="wallet-balance">
+                {editingId === w.id ? (
+                  <form onSubmit={handleUpdateBalance} style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                    <input type="number" step="0.01" value={editBalance}
+                      onChange={e => setEditBalance(e.target.value)}
+                      style={{ width: '100px', padding: '4px 8px', borderRadius: '6px', border: '1px solid #ccc' }} />
+                    <button type="submit" className="submit-btn" style={{ padding: '4px 10px' }}>💾</button>
+                    <button type="button" className="cancel-btn" style={{ padding: '4px 10px' }} onClick={() => setEditingId(null)}>✕</button>
+                  </form>
+                ) : (
+                  <>
+                    <span className={`balance-value ${parseFloat(w.balance) >= 0 ? 'text-success' : 'text-danger'}`}>
+                      R$ {parseFloat(w.balance || 0).toFixed(2)}
+                    </span>
+                    <button className="edit-btn" onClick={() => { setEditingId(w.id); setEditBalance(w.balance); }} title="Editar saldo">✏️</button>
+                    <button className="delete-btn" onClick={() => onDelete(w.id)} title="Excluir">🗑️</button>
+                  </>
+                )}
               </div>
             </div>
           ))
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Componente Metas
+function Metas({ goals, onAdd, onUpdate, onDelete }) {
+  const [form, setForm] = useState({ name: '', target_amount: '', current_amount: '0', deadline: '', category: '' });
+  const [showForm, setShowForm] = useState(false);
+  const [contributionId, setContributionId] = useState(null);
+  const [contribution, setContribution] = useState('');
+
+  const categorias = ['Viagem', 'Reserva de Emergência', 'Imóvel', 'Veículo', 'Educação', 'Outros'];
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (!form.name || !form.target_amount) { toast.error('Informe o nome e valor alvo!'); return; }
+    onAdd({ ...form, target_amount: parseFloat(form.target_amount), current_amount: parseFloat(form.current_amount || 0) });
+    setForm({ name: '', target_amount: '', current_amount: '0', deadline: '', category: '' });
+    setShowForm(false);
+  };
+
+  const handleContribution = (e, goal) => {
+    e.preventDefault();
+    const newAmt = parseFloat(goal.current_amount || 0) + parseFloat(contribution || 0);
+    onUpdate(goal.id, { ...goal, current_amount: newAmt });
+    setContributionId(null);
+    setContribution('');
+  };
+
+  return (
+    <div className="metas-section">
+      <div className="section-header">
+        <h2>🎯 Metas Financeiras</h2>
+        <button className="add-user-btn" onClick={() => setShowForm(v => !v)}>
+          {showForm ? '❌ Cancelar' : '➕ Nova Meta'}
+        </button>
+      </div>
+
+      {showForm && (
+        <div className="add-user-form">
+          <h3>Nova Meta</h3>
+          <form onSubmit={handleSubmit}>
+            <div className="form-grid-2">
+              <div className="form-group">
+                <label>Nome da Meta</label>
+                <input type="text" placeholder="Ex: Viagem para Europa" value={form.name}
+                  onChange={e => setForm({ ...form, name: e.target.value })} required />
+              </div>
+              <div className="form-group">
+                <label>Valor Alvo (R$)</label>
+                <input type="number" step="0.01" placeholder="0,00" value={form.target_amount}
+                  onChange={e => setForm({ ...form, target_amount: e.target.value })} required />
+              </div>
+              <div className="form-group">
+                <label>Valor Atual (R$)</label>
+                <input type="number" step="0.01" placeholder="0,00" value={form.current_amount}
+                  onChange={e => setForm({ ...form, current_amount: e.target.value })} />
+              </div>
+              <div className="form-group">
+                <label>Prazo</label>
+                <input type="date" value={form.deadline}
+                  onChange={e => setForm({ ...form, deadline: e.target.value })} />
+              </div>
+              <div className="form-group">
+                <label>Categoria</label>
+                <select value={form.category} onChange={e => setForm({ ...form, category: e.target.value })}>
+                  <option value="">Selecione...</option>
+                  {categorias.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
+            </div>
+            <button type="submit" className="submit-btn">✅ Criar Meta</button>
+          </form>
+        </div>
+      )}
+
+      <div className="goals-list">
+        {goals.length === 0 ? (
+          <p className="empty-message">Nenhuma meta cadastrada</p>
+        ) : (
+          goals.map(g => {
+            const current = parseFloat(g.current_amount || 0);
+            const target = parseFloat(g.target_amount);
+            const pct = Math.min((current / target) * 100, 100);
+            const completed = current >= target;
+            return (
+              <div key={g.id} className={`goal-card ${completed ? 'completed' : ''}`}>
+                <div className="goal-header">
+                  <div>
+                    <h4>{completed ? '✅ ' : ''}{g.name}</h4>
+                    {g.category && <span className="period-badge">{g.category}</span>}
+                    {g.deadline && <small> • Prazo: {new Date(g.deadline + 'T00:00:00').toLocaleDateString('pt-BR')}</small>}
+                  </div>
+                  <button className="delete-btn" onClick={() => onDelete(g.id)}>🗑️</button>
+                </div>
+                <div className="goal-amounts">
+                  <span>R$ {current.toFixed(2)} / R$ {target.toFixed(2)}</span>
+                  <span className="pct-badge">{pct.toFixed(0)}%</span>
+                </div>
+                <div className="goal-bar-wrap">
+                  <div className="goal-bar" style={{ width: `${pct}%`, background: completed ? '#2ecc71' : pct >= 75 ? '#27ae60' : pct >= 40 ? '#3498db' : '#e67e22' }} />
+                </div>
+                {!completed && (
+                  <div className="contribution-area">
+                    {contributionId === g.id ? (
+                      <form onSubmit={e => handleContribution(e, g)} style={{ display: 'flex', gap: '6px', marginTop: '8px' }}>
+                        <input type="number" step="0.01" placeholder="Valor contribuição" value={contribution}
+                          onChange={e => setContribution(e.target.value)}
+                          style={{ flex: 1, padding: '5px 10px', borderRadius: '6px', border: '1px solid #ccc' }} />
+                        <button type="submit" className="submit-btn" style={{ padding: '5px 12px' }}>✅</button>
+                        <button type="button" className="cancel-btn" style={{ padding: '5px 12px' }} onClick={() => setContributionId(null)}>✕</button>
+                      </form>
+                    ) : (
+                      <button className="pay-btn" style={{ marginTop: '8px' }} onClick={() => { setContributionId(g.id); setContribution(''); }}>
+                        ➕ Adicionar Contribuição
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })
         )}
       </div>
     </div>
