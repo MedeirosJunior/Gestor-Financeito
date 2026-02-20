@@ -241,22 +241,30 @@ const initializeDatabase = async () => {
   }
 };
 
-// Backup automático para SQLite
+// Log de integridade do banco (todos os dados são persistidos automaticamente no Turso/SQLite)
 const backupData = async () => {
   try {
-    const users = await dbAll('SELECT * FROM users');
-    const transactions = await dbAll('SELECT * FROM transactions');
-
-    const backup = {
-      timestamp: new Date().toISOString(),
-      users: users,
-      transactions: transactions
-    };
-
-    console.log('✅ Backup SQLite criado:', new Date().toLocaleString(),
-      `- ${backup.users.length} usuários, ${backup.transactions.length} transações`);
+    const [users, transactions, wallets, goals, budgets, recurring, categories] = await Promise.all([
+      dbAll('SELECT COUNT(*) as n FROM users'),
+      dbAll('SELECT COUNT(*) as n FROM transactions'),
+      dbAll('SELECT COUNT(*) as n FROM wallets'),
+      dbAll('SELECT COUNT(*) as n FROM goals'),
+      dbAll('SELECT COUNT(*) as n FROM budgets'),
+      dbAll('SELECT COUNT(*) as n FROM recurring_expenses'),
+      dbAll('SELECT COUNT(*) as n FROM categories'),
+    ]);
+    console.log(
+      `✅ Banco OK [${new Date().toLocaleString('pt-BR')}]`,
+      `| usuários: ${users[0]?.n ?? 0}`,
+      `| transações: ${transactions[0]?.n ?? 0}`,
+      `| contas: ${wallets[0]?.n ?? 0}`,
+      `| metas: ${goals[0]?.n ?? 0}`,
+      `| orçamentos: ${budgets[0]?.n ?? 0}`,
+      `| recorrentes: ${recurring[0]?.n ?? 0}`,
+      `| categorias: ${categories[0]?.n ?? 0}`
+    );
   } catch (error) {
-    console.error('❌ Erro no backup SQLite:', error);
+    console.error('❌ Erro ao verificar banco:', error);
   }
 };
 
