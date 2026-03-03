@@ -450,6 +450,20 @@ const initializeDatabase = async () => {
       )
     `);
 
+    // Criar tabela de licença local (validação cruzada com banco MySQL central)
+    await dbRun(`
+      CREATE TABLE IF NOT EXISTS licenca_local (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        CodigoDoCliente INTEGER,
+        CodigoDaLicenca INTEGER,
+        CodigoDoProduto INTEGER,
+        CNPJ TEXT,
+        Versao TEXT DEFAULT '1.0',
+        Situacao TEXT DEFAULT 'Ativo',
+        atualizado_em DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
     // Seed SMTP — INSERT OR REPLACE força atualização mesmo se já existir
     const smtpDefaults = [
       ['SMTP', 'HOST', 'smtp.gmail.com'],
@@ -542,6 +556,19 @@ initializeDatabase().catch(error => {
   console.error('❌ Falha crítica na inicialização do banco:', error);
   process.exit(1);
 });
+
+// ============ MIDDLEWARE DE LICENÇA ============
+// Inicializa a fábrica com as funções de DB já configuradas (Turso ou SQLite)
+let validarLicencaMiddleware = null;
+try {
+  const createLicencaMiddleware = require('./middleware/validarLicencaMySQL');
+  const licencaMw = createLicencaMiddleware(dbGet, dbRun);
+  validarLicencaMiddleware = licencaMw.validarLicencaMiddleware;
+  console.log('✅ Middleware de licença carregado');
+} catch (e) {
+  console.error('⚠️ Erro ao carregar middleware de licença:', e.message);
+  console.error('⚠️ Sistema continuará SEM validação de licença!');
+}
 
 // Criar múltiplas transações em lote (parcelamento)
 app.post('/transactions/batch', authenticateToken, async (req, res) => {
@@ -894,6 +921,58 @@ const requireAdmin = (req, res, next) => {
   next();
 };
 app.use('/admin', requireAdmin);
+
+// ============ VALIDAÇÃO DE LICENÇA ============
+// Aplicada após JWT, protege todas as rotas exceto /admin/licenca
+if (validarLicencaMiddleware) {
+  app.use((req, res, next) => {
+    // Rotas isentas de validação de licença
+    if (
+      req.path === '/api/health' ||
+      req.path === '/api/ping' ||
+      req.path.startsWith('/admin/licenca')
+    ) {
+      return next();
+    }
+    return validarLicencaMiddleware(req, res, next);
+  });
+  console.log('✅ Validação de licença ativada');
+}
+
+// ============ ROTAS DE LICENÇA (admin) ============
+/** Retorna a licença local cadastrada. */
+app.get('/admin/licenca', async (req, res) => {
+  try {
+    const row = await dbGet('SELECT * FROM licenca_local ORDER BY id DESC LIMIT 1', []);
+    return res.json(row || null);
+  } catch (e) {
+    res.status(500).json({ error: 'Erro ao ler licença local', detalhes: e.message });
+  }
+});
+
+/** Cria ou atualiza a licença local (upsert). */
+app.post('/admin/licenca', async (req, res) => {
+  try {
+    const { CodigoDoCliente, CodigoDaLicenca, CodigoDoProduto, CNPJ, Versao, Situacao } = req.body;
+    const values = [CodigoDoCliente ?? null, CodigoDaLicenca ?? null, CodigoDoProduto ?? null, CNPJ ?? null, Versao ?? '1.0', Situacao ?? 'Ativo'];
+    const existing = await dbGet('SELECT id FROM licenca_local ORDER BY id DESC LIMIT 1', []);
+    if (existing) {
+      await dbRun(
+        'UPDATE licenca_local SET CodigoDoCliente=?,CodigoDaLicenca=?,CodigoDoProduto=?,CNPJ=?,Versao=?,Situacao=?,atualizado_em=CURRENT_TIMESTAMP WHERE id=?',
+        [...values, existing.id]
+      );
+      return res.json({ ok: true, updated: true });
+    } else {
+      await dbRun(
+        'INSERT INTO licenca_local (CodigoDoCliente,CodigoDaLicenca,CodigoDoProduto,CNPJ,Versao,Situacao) VALUES (?,?,?,?,?,?)',
+        values
+      );
+      return res.json({ ok: true, inserted: true });
+    }
+  } catch (e) {
+    res.status(500).json({ error: 'Erro ao salvar licença local', detalhes: e.message });
+  }
+});
 
 // ============ ROTAS DE CONFIGURAÇÕES (admin) ============
 /** Lista todas as configurações de uma seção (ou todas). */
