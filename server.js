@@ -950,6 +950,17 @@ app.get('/admin/licenca', async (req, res) => {
   }
 });
 
+/** Diagnóstico: mostra todas as colunas e valores do registro de licença no banco (Turso/SQLite). */
+app.get('/admin/licenca/debug', async (req, res) => {
+  try {
+    const row = await dbGet('SELECT * FROM licenca_local ORDER BY id DESC LIMIT 1', []);
+    if (!row) return res.json({ encontrado: false, mensagem: 'Nenhum registro em licenca_local' });
+    return res.json({ encontrado: true, colunas: Object.keys(row), dados: row });
+  } catch (e) {
+    res.status(500).json({ error: 'Erro ao consultar licenca_local', detalhes: e.message });
+  }
+});
+
 /** Cria ou atualiza a licença local (upsert). */
 app.post('/admin/licenca', async (req, res) => {
   try {

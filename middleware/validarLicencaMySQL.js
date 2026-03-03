@@ -6,8 +6,11 @@
  *
  * Fluxo:
  * 1. Busca licença LOCAL na tabela licenca_local (Turso/SQLite via dbGet)
- * 2. Compara campo-a-campo com o banco CENTRAL MySQL (controle_clientes)
- * 3. Se tudo bater → acesso liberado; caso contrário → 403
+ *    - Sem registro → bloqueia SEMPRE (licença não configurada)
+ * 2. Se MySQL configurado → compara campo-a-campo com banco CENTRAL
+ *    - Divergência, não encontrada ou erro de conexão → bloqueia
+ * 3. Se MySQL NÃO configurado → valida apenas localmente
+ *    - Situacao != 'Ativo' ou expirada → bloqueia
  *
  * Uso (em server.js, após dbGet/dbRun estarem definidos):
  *   const { validarLicencaMiddleware } = require('./middleware/validarLicencaMySQL')(dbGet, dbRun);
@@ -41,7 +44,7 @@ const dbConfig = mysqlConfigured ? {
 if (mysqlConfigured) {
     console.log(`📦 Licenças MySQL: ✅ ATIVADO (${process.env.MYSQL_USER}@${process.env.MYSQL_HOST}:${process.env.MYSQL_PORT || 3306}/${process.env.MYSQL_DATABASE})`);
 } else {
-    console.warn('🔒 Licenças MySQL: ❌ NÃO CONFIGURADO — TODAS as rotas protegidas serão BLOQUEADAS.');
+    console.log('📦 Licenças MySQL: ⏭️ NÃO CONFIGURADO — validação será feita apenas pelo banco local.');
 }
 
 // ── Cache em memória (5 minutos) ─────────────────────────────────────────────
@@ -51,7 +54,7 @@ const CACHE_DURATION = 5 * 60 * 1000;
 // ── Consulta ao banco CENTRAL MySQL ──────────────────────────────────────────
 async function consultarLicencaCentral(cnpj, codigoDoCliente = null) {
     if (!mysqlConfigured || !dbConfig) {
-        return { _naoConfigurado: true };
+        return null; // MySQL não configurado: validação local assume
     }
 
     let connection;
@@ -129,10 +132,6 @@ function validarLicenca(licenca) {
         return { valida: false, mensagem: 'Licença não encontrada no banco central' };
     }
 
-    if (licenca._naoConfigurado) {
-        return { valida: false, mensagem: 'Banco de licenças não configurado. Contate o administrador.' };
-    }
-
     if (licenca._erroConexao) {
         console.error(`❌ MySQL indisponível: ${licenca.mensagem}`);
         return { valida: false, mensagem: 'Serviço de licenças indisponível. Tente novamente mais tarde.' };
@@ -186,7 +185,7 @@ module.exports = function createLicencaMiddleware(dbGet, dbRun) {
                 'SELECT * FROM licenca_local ORDER BY id DESC LIMIT 1', []
             );
 
-            // Sem licença local cadastrada → bloquear sempre
+            // Sem licença local cadastrada → bloquear sempre (licença nunca foi configurada)
             if (!local) {
                 return res.status(403).json({
                     error: 'Acesso negado',
@@ -196,73 +195,107 @@ module.exports = function createLicencaMiddleware(dbGet, dbRun) {
                 });
             }
 
-            // 2. Há licença local → comparar campo-a-campo com banco central
-            const central = await consultarLicencaCentral(
-                local.CNPJ,
-                local.CodigoDoCliente || null
-            );
+            // 2. MySQL configurado → validação cruzada com banco central
+            if (mysqlConfigured) {
+                const central = await consultarLicencaCentral(
+                    local.CNPJ,
+                    local.CodigoDoCliente || null
+                );
 
-            // Verificar sentinelas antes de comparar campos
-            if (!central || central._naoConfigurado || central._erroConexao) {
-                const motivo = !central
-                    ? 'Licença não encontrada no banco central'
-                    : central._naoConfigurado
-                        ? 'Banco de licenças não configurado'
+                // MySQL configurado mas falhou ou não encontrou → bloquear
+                if (!central || central._erroConexao) {
+                    const motivo = !central
+                        ? 'Licença não encontrada no banco central'
                         : `Serviço de licenças indisponível: ${central.mensagem}`;
-                await registrarAcesso(local.CNPJ, false, motivo);
-                return res.status(403).json({
-                    error: 'Acesso negado',
-                    motivo,
-                    detalhes: 'Contate o administrador.',
-                });
-            }
-
-            // 3. Comparar campos locais com campos do central
-            const fields = [
-                { local: 'CodigoDoCliente', central: 'CodigoDoCliente' },
-                { local: 'CodigoDaLicenca', central: 'CodigoDaLicenca' },
-                { local: 'CodigoDoProduto', central: 'CodigoDoProduto' },
-                { local: 'CNPJ', central: 'CNPJ' },
-                { local: 'Versao', central: 'Versao' },
-                { local: 'Situacao', central: 'Situacao' },
-            ];
-
-            const diffs = [];
-            for (const f of fields) {
-                const l = local[f.local] == null ? null : String(local[f.local]).trim();
-                const c = central[f.central] == null ? null : String(central[f.central]).trim();
-
-                const normalizar = (v) => (v || '').toLowerCase();
-                if (f.local === 'Situacao' || f.local === 'Versao') {
-                    if (normalizar(l) !== normalizar(c)) diffs.push(f.local);
-                } else {
-                    if (l !== c) diffs.push(f.local);
+                    await registrarAcesso(local.CNPJ, false, motivo);
+                    return res.status(403).json({
+                        error: 'Acesso negado',
+                        motivo,
+                        detalhes: 'Contate o administrador.',
+                    });
                 }
+
+                // Comparar campos locais com campos do central
+                const fields = [
+                    { local: 'CodigoDoCliente', central: 'CodigoDoCliente' },
+                    { local: 'CodigoDaLicenca', central: 'CodigoDaLicenca' },
+                    { local: 'CodigoDoProduto', central: 'CodigoDoProduto' },
+                    { local: 'CNPJ', central: 'CNPJ' },
+                    { local: 'Versao', central: 'Versao' },
+                    { local: 'Situacao', central: 'Situacao' },
+                ];
+
+                const diffs = [];
+                for (const f of fields) {
+                    const l = local[f.local] == null ? null : String(local[f.local]).trim();
+                    const c = central[f.central] == null ? null : String(central[f.central]).trim();
+                    const normalizar = (v) => (v || '').toLowerCase();
+                    if (f.local === 'Situacao' || f.local === 'Versao') {
+                        if (normalizar(l) !== normalizar(c)) diffs.push(f.local);
+                    } else {
+                        if (l !== c) diffs.push(f.local);
+                    }
+                }
+
+                if (diffs.length > 0) {
+                    const msg = `Licença divergente nos campos: ${diffs.join(', ')}`;
+                    await registrarAcesso(local.CNPJ, false, msg);
+                    return res.status(403).json({
+                        error: 'Acesso negado',
+                        motivo: 'Licença divergente',
+                        detalhes: msg,
+                    });
+                }
+
+                // Verificar Situacao e expiração no central
+                const validacao = validarLicenca(central);
+                if (!validacao.valida) {
+                    await registrarAcesso(local.CNPJ, false, validacao.mensagem);
+                    return res.status(403).json({
+                        error: 'Licença inválida',
+                        mensagem: validacao.mensagem,
+                        bloqueado: true,
+                    });
+                }
+
+                await registrarAcesso(local.CNPJ, true, 'Licença validada com sucesso (central)');
+                req.licenca = central;
+                return next();
             }
 
-            if (diffs.length > 0) {
-                const msg = `Licença divergente nos campos: ${diffs.join(', ')}`;
-                await registrarAcesso(local.CNPJ, false, msg);
-                return res.status(403).json({
-                    error: 'Acesso negado',
-                    motivo: 'Licença divergente',
-                    detalhes: msg,
-                });
-            }
+            // 3. MySQL NÃO configurado → valida apenas o registro local
+            // Se Situacao for null/undefined (registro antigo), trata como válido.
+            // Só bloqueia se Situacao estiver EXPLICITAMENTE diferente de 'Ativo'.
+            const situacaoLocal = local.Situacao != null
+                ? String(local.Situacao).trim().toLowerCase()
+                : 'ativo'; // null = campo não preenchido = trata como ativo
 
-            // 4. Verificar Situacao e expiração no central
-            const validacao = validarLicenca(central);
-            if (!validacao.valida) {
-                await registrarAcesso(local.CNPJ, false, validacao.mensagem);
+            if (situacaoLocal !== 'ativo') {
                 return res.status(403).json({
                     error: 'Licença inválida',
-                    mensagem: validacao.mensagem,
+                    mensagem: `Licença ${local.Situacao}. Contate o administrador.`,
                     bloqueado: true,
                 });
             }
 
-            await registrarAcesso(local.CNPJ, true, 'Licença validada com sucesso');
-            req.licenca = central;
+            // Verifica expiração apenas se o campo existir e tiver valor
+            const dataExpiracao = local.DataExpiracao ?? local.data_expiracao ?? local.dataExpiracao ?? null;
+            if (dataExpiracao) {
+                const agora = new Date();
+                const exp = new Date(dataExpiracao);
+                const expFimDoDia = new Date(exp.getFullYear(), exp.getMonth(), exp.getDate(), 23, 59, 59, 999);
+                if (expFimDoDia < agora) {
+                    return res.status(403).json({
+                        error: 'Licença expirada',
+                        mensagem: 'Licença expirada. Renove sua licença.',
+                        bloqueado: true,
+                    });
+                }
+            }
+
+            const cnpjLog = local.CNPJ ?? local.cnpj ?? '(não informado)';
+            console.log(`[Licença] ✅ Validada localmente (Turso, sem MySQL central) — CNPJ: ${cnpjLog}`);
+            req.licenca = local;
             return next();
 
         } catch (error) {
