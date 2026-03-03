@@ -277,6 +277,30 @@ app.use(helmet());
 app.use(cors(corsOptions));
 app.use(express.json());
 
+// ============ MIDDLEWARE DE LICENÇA ============
+// Inicializado aqui para interceptar TODAS as rotas, incluindo /transactions.
+// dbGet e dbRun já estão atribuídos (Turso ou SQLite) de forma síncrona acima.
+{
+  let _validarLicenca = null;
+  try {
+    const createLicencaMiddleware = require('./middleware/validarLicencaMySQL');
+    _validarLicenca = createLicencaMiddleware(dbGet, dbRun).validarLicencaMiddleware;
+    console.log('✅ Middleware de licença carregado');
+  } catch (e) {
+    console.error('⚠️ Erro ao carregar middleware de licença:', e.message);
+  }
+
+  if (_validarLicenca) {
+    app.use((req, res, next) => {
+      // Apenas health check isento — todo o resto exige licença válida,
+      // inclusive login. A tabela licenca_local é preenchida por script externo.
+      if (req.path === '/api/health' || req.path === '/api/ping') return next();
+      return _validarLicenca(req, res, next);
+    });
+    console.log('✅ Validação de licença ativada (inclusive login)');
+  }
+}
+
 // Rate limiter para login: máximo 10 tentativas por 15 minutos por IP
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -553,24 +577,20 @@ const backupData = async () => {
   }
 };
 
-// Inicializar banco de dados
-initializeDatabase().catch(error => {
-  console.error('❌ Falha crítica na inicialização do banco:', error);
-  process.exit(1);
-});
-
-// ============ MIDDLEWARE DE LICENÇA ============
-// Inicializa a fábrica com as funções de DB já configuradas (Turso ou SQLite)
-let validarLicencaMiddleware = null;
-try {
-  const createLicencaMiddleware = require('./middleware/validarLicencaMySQL');
-  const licencaMw = createLicencaMiddleware(dbGet, dbRun);
-  validarLicencaMiddleware = licencaMw.validarLicencaMiddleware;
-  console.log('✅ Middleware de licença carregado');
-} catch (e) {
-  console.error('⚠️ Erro ao carregar middleware de licença:', e.message);
-  console.error('⚠️ Sistema continuará SEM validação de licença!');
-}
+// Inicializar banco de dados e só então subir o servidor
+// IMPORTANTE: app.listen fica aqui dentro para garantir que a tabela
+// licenca_local já existe no Turso antes de qualquer requisição chegar.
+initializeDatabase()
+  .then(() => {
+    app.listen(port, () => {
+      console.log(`🚀 API do Gestor Financeiro rodando em http://localhost:${port}`);
+      console.log(`📊 Backend iniciado com sucesso!`);
+    });
+  })
+  .catch(error => {
+    console.error('❌ Falha crítica na inicialização do banco:', error);
+    process.exit(1);
+  });
 
 // Criar múltiplas transações em lote (parcelamento)
 app.post('/transactions/batch', authenticateToken, async (req, res) => {
@@ -923,23 +943,6 @@ const requireAdmin = (req, res, next) => {
   next();
 };
 app.use('/admin', requireAdmin);
-
-// ============ VALIDAÇÃO DE LICENÇA ============
-// Aplicada após JWT, protege todas as rotas exceto /admin/licenca
-if (validarLicencaMiddleware) {
-  app.use((req, res, next) => {
-    // Rotas isentas de validação de licença
-    if (
-      req.path === '/api/health' ||
-      req.path === '/api/ping' ||
-      req.path.startsWith('/admin/licenca')
-    ) {
-      return next();
-    }
-    return validarLicencaMiddleware(req, res, next);
-  });
-  console.log('✅ Validação de licença ativada');
-}
 
 // ============ ROTAS DE LICENÇA (admin) ============
 /** Retorna a licença local cadastrada. */
@@ -1773,7 +1776,3 @@ app.post('/send-email-summary', authenticateToken, async (req, res) => {
   }
 });
 
-app.listen(port, () => {
-  console.log(`🚀 API do Gestor Financeiro rodando em http://localhost:${port}`);
-  console.log(`📊 Backend iniciado com sucesso!`);
-});
