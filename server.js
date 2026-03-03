@@ -463,6 +463,8 @@ const initializeDatabase = async () => {
         atualizado_em DATETIME DEFAULT CURRENT_TIMESTAMP
       )
     `);
+    // Migração: adiciona coluna atualizado_em caso a tabela já existisse sem ela
+    await dbRun(`ALTER TABLE licenca_local ADD COLUMN atualizado_em DATETIME DEFAULT CURRENT_TIMESTAMP`).catch(() => { });
 
     // Seed SMTP — INSERT OR REPLACE força atualização mesmo se já existir
     const smtpDefaults = [
@@ -968,10 +970,18 @@ app.post('/admin/licenca', async (req, res) => {
     const values = [CodigoDoCliente ?? null, CodigoDaLicenca ?? null, CodigoDoProduto ?? null, CNPJ ?? null, Versao ?? '1.0', Situacao ?? 'Ativo'];
     const existing = await dbGet('SELECT id FROM licenca_local ORDER BY id DESC LIMIT 1', []);
     if (existing) {
-      await dbRun(
-        'UPDATE licenca_local SET CodigoDoCliente=?,CodigoDaLicenca=?,CodigoDoProduto=?,CNPJ=?,Versao=?,Situacao=?,atualizado_em=CURRENT_TIMESTAMP WHERE id=?',
-        [...values, existing.id]
-      );
+      // Tenta atualizar com atualizado_em; se coluna não existir, atualiza sem ela
+      try {
+        await dbRun(
+          'UPDATE licenca_local SET CodigoDoCliente=?,CodigoDaLicenca=?,CodigoDoProduto=?,CNPJ=?,Versao=?,Situacao=?,atualizado_em=CURRENT_TIMESTAMP WHERE id=?',
+          [...values, existing.id]
+        );
+      } catch (_) {
+        await dbRun(
+          'UPDATE licenca_local SET CodigoDoCliente=?,CodigoDaLicenca=?,CodigoDoProduto=?,CNPJ=?,Versao=?,Situacao=? WHERE id=?',
+          [...values, existing.id]
+        );
+      }
       return res.json({ ok: true, updated: true });
     } else {
       await dbRun(
