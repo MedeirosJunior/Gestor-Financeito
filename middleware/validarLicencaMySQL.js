@@ -22,6 +22,14 @@
 
 const mysql = require('mysql2/promise');
 
+// ── Contato do suporte técnico ───────────────────────────────────────────────
+const SUPORTE = {
+    empresa: 'JrInfo Sistemas',
+    whatsapp: '(31) 99134-3519',
+    email: 'jrinfosistemas@gmail.com',
+    mensagem: 'Em caso de dúvidas ou para regularizar sua licença, entre em contato com o suporte técnico: JrInfo - WhatsApp (31) 99134-3519 ou jrinfosistemas@gmail.com',
+};
+
 // ── Configuração MySQL (banco central de licenças) ──────────────────────────
 const mysqlConfigured = !!(
     process.env.MYSQL_HOST &&
@@ -190,7 +198,8 @@ module.exports = function createLicencaMiddleware(dbGet, dbRun) {
                 return res.status(403).json({
                     error: 'Acesso negado',
                     motivo: 'Licença não configurada neste sistema.',
-                    detalhes: 'Contate o administrador para ativar a licença.',
+                    detalhes: 'A licença deste sistema ainda não foi ativada.',
+                    suporte: SUPORTE.mensagem,
                     bloqueado: true,
                 });
             }
@@ -211,7 +220,8 @@ module.exports = function createLicencaMiddleware(dbGet, dbRun) {
                     return res.status(403).json({
                         error: 'Acesso negado',
                         motivo,
-                        detalhes: 'Contate o administrador.',
+                        detalhes: 'Não foi possível validar sua licença no servidor central.',
+                        suporte: SUPORTE.mensagem,
                     });
                 }
 
@@ -243,7 +253,8 @@ module.exports = function createLicencaMiddleware(dbGet, dbRun) {
                     return res.status(403).json({
                         error: 'Acesso negado',
                         motivo: 'Licença divergente',
-                        detalhes: msg,
+                        detalhes: 'Os dados da licença deste sistema não conferem com o servidor central.',
+                        suporte: SUPORTE.mensagem,
                     });
                 }
 
@@ -252,8 +263,9 @@ module.exports = function createLicencaMiddleware(dbGet, dbRun) {
                 if (!validacao.valida) {
                     await registrarAcesso(local.CNPJ, false, validacao.mensagem);
                     return res.status(403).json({
-                        error: 'Licença inválida',
-                        mensagem: validacao.mensagem,
+                        error: 'Acesso negado',
+                        motivo: validacao.mensagem,
+                        suporte: SUPORTE.mensagem,
                         bloqueado: true,
                     });
                 }
@@ -272,8 +284,9 @@ module.exports = function createLicencaMiddleware(dbGet, dbRun) {
 
             if (situacaoLocal !== 'ativo') {
                 return res.status(403).json({
-                    error: 'Licença inválida',
-                    mensagem: `Licença ${local.Situacao}. Contate o administrador.`,
+                    error: 'Acesso negado',
+                    motivo: `Licença ${local.Situacao}.`,
+                    suporte: SUPORTE.mensagem,
                     bloqueado: true,
                 });
             }
@@ -286,8 +299,10 @@ module.exports = function createLicencaMiddleware(dbGet, dbRun) {
                 const expFimDoDia = new Date(exp.getFullYear(), exp.getMonth(), exp.getDate(), 23, 59, 59, 999);
                 if (expFimDoDia < agora) {
                     return res.status(403).json({
-                        error: 'Licença expirada',
-                        mensagem: 'Licença expirada. Renove sua licença.',
+                        error: 'Acesso negado',
+                        motivo: 'Licença expirada.',
+                        detalhes: 'O período de uso deste sistema foi encerrado.',
+                        suporte: SUPORTE.mensagem,
                         bloqueado: true,
                     });
                 }
@@ -301,7 +316,9 @@ module.exports = function createLicencaMiddleware(dbGet, dbRun) {
         } catch (error) {
             console.error('❌ Erro ao validar licença:', error);
             return res.status(500).json({
-                error: 'Erro interno ao verificar licença. Tente novamente.',
+                error: 'Erro interno ao verificar licença.',
+                detalhes: 'Não foi possível validar sua licença no momento.',
+                suporte: SUPORTE.mensagem,
             });
         }
     }
